@@ -182,6 +182,19 @@ assert
 #
 #   Ye Olde Commutative Diagram of pain:
 #
+#   I believe there is a Universal Property for infusion -- a reason why it is
+#   the uniquely determined minimal operation that does what it does -- due to
+#   being the initial algebra of some (not-yet-clearly-stated) endofunctor on
+#   the category of Nix values... but I need to spell that out.
+#
+#   The important part is that it respects the structure of the monoid
+#   operations (attrset-update, list concatenation, and function composition) on
+#   **all three** of Nix's three nonprimitive types (attrsets, lists, and
+#   functions).  Additionally, the preexisting monoid-preserving maps
+#   (zipAttrs, pipe, and applyAttrs) commute with `infuse` as shown in the
+#   diagram below.  I think that probably makes infuse a natural transformation
+#   in some way, but it's only a hunch right now.
+#
 #                                                                 zipAttrs
 #       [  { y = foo; } ... { y = bar; } { x = baz; } ]  ------------------------>      { y = [ foo ... bar ];  x = baz; }
 #                                  |                                                                  |
