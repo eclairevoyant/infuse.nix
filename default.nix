@@ -1,0 +1,635 @@
+############################################################################
+#
+# version 0.9
+#
+# infuse.nix: generalizes both lib.pipe and recursiveUpdate; "deep" version of
+# both .override and .overrideAttrs which generalizes both `lib.pipe`; can
+# be used as a leaner untyped alternative to lib.modules; works well with yants.
+#
+############################################################################
+#
+# Copyright (c) 2024 amjoseph F0B74D717CDE8412A3E0D4D5F29AC8080DA8E1E0
+# You may copy and modify this subject to the following (MIT) license
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+# LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#
+############################################################################
+#
+# The canonical sources for this project are:
+#
+#   (primary) https://git.sr.ht/~amjoseph/infuse.nix/tree/trunk/item/default.nix
+#   (backup)  https://codeberg.org/amjoseph/infuse.nix/src/branch/trunk/default.nix
+#
+# Questions? #six https://hackint.org/
+#
+#                               ** VENDOR ME! **
+#
+# This file is self-contained and has no dependencies other than <nixpkgs/lib>;
+# you should copy it into your own project.
+#
+############################################################################
+
+
+
+############################################################################
+#
+# Specification
+#
+# The following is a specification, not an introduction.  See README.md for more
+# details or TUTORIAL.md for an introduction.  The algebraic laws, as well as
+# some of the non-obvious consequences of the specification are documented in
+# tests/default.nix, along with test cases which demonstrate them.
+#
+# A *desugared infusion* is defined (inductively) as a function or a non-empty
+# attrset whose values are desugared infusions.
+#
+# The result of *infusing* a target (which may not exist) with a desugared
+# infusion is defined inductively based on the type of the infusion:
+#
+# - for a function,
+#   - the function applied to:
+#     - if the target exists, the target
+#     - if the target does not exist, the function's __default_argument attribute
+# - for an attrset:
+#   - if the target is a derivation: throw an error
+#   - if the target is not an attrset: throw an error
+#   - if the target is a non-derivation attrset: the target updated (//) with an
+#     attrset formed by infusing each attribute of the infusion upon the target
+#     attrvalue having the same name if one exists.
+#
+# An important property of this encoding is that it is totally collision-free.
+# There are no special attribute names or special values: desugared infusions
+# can act upon any attrset, even attrsets with names like `__append` and values
+# like `null` or `throw "fail"`.
+#
+#
+# A (sugared) *infusion* is defined the same way as a desugared infusion, except
+# that:
+#
+#   - A sugared infusion may be a list of sugared infusions.
+#   - If a sugared infusion is an attrset and any of its attrnames begin with
+#     the two-character prefix "__" (double underscore), then:
+#     - its attrvalues may be *any* Nix value
+#     - *all* of its attrnames must begin with "__"
+#
+# In other words, a sugared infusion may not mix __-prefixed attributes and
+# non-__-prefixed attributes in the same attrset.
+#
+# To *desugar* an infusion, do the following recursively, depth-first:
+#
+#   - To desugar a list, desugar its elements, apply `flip-infuse-desugared` to
+#     each element to create a function, and then apply `flip pipe` to pipeline
+#     the list of functions into a single function.
+#
+#   - To desugar an attrset having names which begin with "__", apply the
+#     `desugar` function.  The result of desugaring these attribute sets is a
+#     list containing one element for each attribute in the sugar-map; the value
+#     of the element is the sugar-map attrvalue applied to the infusion
+#     attrvalue of the same name, or [] if no such infusion attrvalue exists.
+#     The order of the elements within this list is currently fixed, and
+#     customizing the sugar-map is not supported.
+#
+# The sugar-map is a parameter to this file and can be customized.  The default
+# value currently has these attributes, processed in this order:
+#
+# __assign   # assign a new attrvalue
+# __default  # assign a new attrvalue only if none already existed
+# __init     # assign a new attrvalue if none existed; otherwise `throw`
+#
+# __underlay # pre-extend an overlay by adding another one which acts before it
+# __overlay  # post-extend an overlay by adding another one which acts after it
+#
+# __prepend  # prepend a string or list
+# __append   # append a string or list
+#
+# __input    # invoke .override
+# __output   # invoke .overrideAttrs
+#
+# __infuse   # `infuse target { __infuse = f; }` is the same as `infuse target f`
+#
+# There is no `__remove` because Nix attrsets are strict in their attrnames;
+# deleting attribute names from an attrset tends to cause infinite recursion
+# failures.  Consider using `__assign = null` instead.
+#
+# The result of infusing a target with a infusion is the result of infusing the
+# target with the desugared infusion.
+#
+
+
+{ lib ? import <nixpkgs/lib> { }
+
+# If null, the default-sugars is used; otherwise this should be a list of
+# `lib.nameValuePair`s, each of which has the name (e.g. __input) of a sugar as
+# its attrname and a function `path: infusion: ...` as its value.  See below for
+# examples.
+, sugars ? null
+, ...
+}:
+let
+
+  #
+  # Conventions:
+  #
+  # - Functions with names ending in `-desugared` deal with infusions that have
+  #   been desugared (i.e. already fed through `desugar`)
+  #
+  # - `flip-foo` is equivalent to `lib.flip foo`, except that the former
+  #    propagates __default_arguments.
+  #
+  # - Non-exported functions all take an addtional `path` argument which is the
+  #   attrpath at which they are being applied.  The `path` argument is used
+  #   only for error reporting, so O(n^2) list-concatenations are okay; they
+  #   won't be forced unless an error is encountered.  These primed functions
+  #   are not exported.
+  #
+
+  inherit (builtins)
+    typeOf length head tail attrValues intersectAttrs;
+  inherit (lib)
+    concatStringsSep flip mapAttrs isFunction isAttrs isDerivation
+    any all pipe showAttrPath nameValuePair listToAttrs
+    zipAttrsWith isList isString id flatten filter hasPrefix
+    attrNames filterAttrs optionalString;
+  inherit (lib.generators)
+    toPretty;
+
+  # Like `isAttrs`, but returns `false` for attrsets with `__functor` attributes.
+  isNonFunctorAttrs = v: (isAttrs v) && !(isFunction v);
+
+  ##############################################################################
+  # utility/helper functions
+  ##############################################################################
+
+  # Error reporting, including attrpath at which the error occurred
+  throw-error =
+    { path ? null
+    , func
+    , msg
+    }:
+    let
+      where = optionalString (path!=null) "at path ${showAttrPath path}: ";
+    in
+      throw "infuse.${func}: ${where}${msg}";
+
+  #
+  # `lib.pipe` is too strict because it uses builtins.foldl'.  So we lift each
+  # function `f` in the pipeline to a suspension `(_: ...)`.  Basically the
+  # usual trick that Ocaml/ML programmers use when they want opt-in laziness,
+  # but here we're doing it in a language which is already lazy since its
+  # builtin primitives are too strict.
+  #
+  # We also optimize for two fast-path cases: [] and [f].
+  #
+  flip-pipe-lazy =
+    functions:
+    if functions == [] then
+      id
+    else if length functions == 1 then
+      head functions
+    else
+      val: lib.pipe
+        (_: val)
+        (map
+          (function:
+            suspended-val:
+            _: function (suspended-val null))
+          functions)
+        null;
+
+  # Returns true if all attrpaths lead to attrsets (i.e. no lists, functions, or
+  # ground types anywhere).
+  is-leafless-attrset = attrs:
+    let
+      values = attrValues attrs;
+    in
+      # This is written as the `&&` of two separate `all` invocations in order
+      # to short-circuit as quickly as possible in the most likely case where
+      # the result is `false`.  If we can return `false` without recursing to
+      # subattributes, that will be faster.
+      all isAttrs values &&
+      all is-leafless-attrset values;
+
+  #
+  # Replace any leafless attrsets anywhere within the infusion with `{}`
+  #
+  # A leafless attrset is either `{}` or an attrset whose attrvalues are all
+  # leafless attrsets.
+  #
+  # Removing these from an infusion before infusing it is not just a performance
+  # optimization.  It is important that `infuse target { a.b.c = {}; }` does not
+  # create an attribute `a` if none existed already in `target`.  However the
+  # naive implementation, which checks for "is leafless" from within
+  # `flip-infuse-desugared-pruned`, has O(n^2) worst-case complexity, because
+  # knowing that `a` is leafless requires traversing arbitrarily deep (in this
+  # case, to `a.b.c`).  Therefore to preserve O(n) worst-case complexity we have
+  # to check for leafless attrsets in a separate pass.
+  #
+  prune =
+    path:
+    infusion:
+    if !(isAttrs infusion)
+    then infusion
+    else let
+      pruned = mapAttrs (k: v: prune (path ++ [k]) v) infusion;
+      is-leafless = all (v: v == {}) (attrValues pruned);
+    in
+      if is-leafless
+      then {}
+      else pruned;
+
+  # `infuse (infuse t a) b == compose-attrset-infusions a b` if both `a` and `b`
+  # are attrsets.
+  compose-attrset-infusions =
+    a: b:
+    assert isAttrs a;
+    assert isAttrs b;
+    (a // b)
+    //
+    mapAttrs
+      (k: _:
+        let
+          composed = flatten [ (a.${k}) (b.${k}) ];
+        in
+          # uncommnent this line to trace optimizations
+          #lib.warn "compose-attrset-infusions ${toPretty {} a} ${toPretty {} b} = ${toPretty {} composed}"
+            composed
+      )
+      (intersectAttrs a b)
+  ;
+
+  # Flatten any nested lists, then merge any contiguous sequences of attrsets
+  # within a list using the (//) operator.  This exploits the "distributive law
+  # of `//` over `[]`
+  optimize-lists =
+    path:
+    infusion:
+
+    if isList infusion
+    then let
+
+      # an "accumulator" -- consists of a list of infusions `list` followed by
+      # an optional single attrset infusion `set`
+      nul = { list = []; set = null; };
+
+      # collapses an accumulator into a single list-infusion
+      collapse = acc: acc.list ++ lib.optionals (acc.set != null) [ acc.set ];
+
+      op = acc: next:
+        if isNonFunctorAttrs next
+        then {
+          inherit (acc) list;
+          set = if acc.set == null
+                then next
+                else compose-attrset-infusions acc.set next;
+        } else {
+          list = (collapse acc) ++ [ next ];
+          set = null;
+        };
+
+      merge = list: collapse (lib.foldl op nul list);
+
+    in lib.pipe infusion [
+      flatten
+      merge
+      #flatten  # should not be necessary
+      (lib.imap0 (idx: v: optimize-lists (path ++ ["[${toString idx}]"]) v))
+    ]
+
+    # necessary because `isAttrs` returns `true` for functors
+    else if isFunction infusion
+    then infusion
+
+    else if !(isAttrs infusion)
+    then infusion
+
+    else mapAttrs (k: v: optimize-lists (path ++ [k]) v) infusion;
+
+
+  ##############################################################################
+  # desugared infusions
+  ##############################################################################
+
+  flip-infuse =
+    path:
+    infusion:
+    lib.pipe infusion [
+      (desugar path)
+      (prune path)
+      (optimize-lists path)
+      (flip-infuse-desugared-pruned path)
+    ];
+
+  # arguments are backwards here to avoid eta-expanding, which would turn a
+  # {__functor = ..., __default_argument = ...} into a normal function
+  flip-infuse-desugared-pruned =
+    path: # attrpath relative to top-level call; only for error reporting
+    infusion: # infusion to infuse upon the target attrset
+
+    let
+      throw-err = msg: throw-error {
+        inherit path msg;
+        func = "flip-infuse-desugared-pruned";
+      };
+    in
+
+    if isFunction infusion
+    then infusion
+
+    else if isList infusion
+    then pipe infusion [
+      (lib.imap0 (idx: flip-infuse-desugared-pruned (path ++ ["[${toString idx}]"])))
+      flip-pipe-lazy
+    ]
+
+    else if !(isAttrs infusion)
+    then throw-err "desugared infusions must contain only functions, lists, and attrsets; found a ${typeOf infusion}"
+
+    else
+    target: # target attrset to be infused with the infusion
+    if isDerivation target
+    then throw-err "attempted to infuse to subattributes of a derivation (did you forget to use desugar?)"
+
+    else if !(isAttrs target)
+    then throw-err "attempted to infuse an attrset to a target of type ${typeOf target}"
+
+    else
+      target //
+        (mapAttrs
+          (k: v:
+            flip-infuse-desugared-pruned (path ++ [ k ]) v
+              (target.${k} or (get-default-argument path v)))
+          infusion);
+
+
+
+  ##############################################################################
+  # Representing missing attributes
+  ##############################################################################
+
+  #
+  # There are basically two ways to represent the "previous value" when infusing
+  # to a missing attribute:
+  #
+  # 1. Represent functions which can tolerate (or are sensitive to) a missing
+  #    previous value using { __functor = ... }.
+  #
+  #    - Downsides: invalidates eta-expansion, identity function is no longer
+  #      the left/right identity for function composition
+  #
+  # 2. Use a special "missing value" marker
+  #
+  #    - Downsides: although we can exploit function equality to create an
+  #      "unforgeable gensym", it isn't a `throw`.  So if it leaks outside of
+  #      infuse, ordinary functions might not force enough of the missing value
+  #      to trigger the error that they should experience.
+  #
+  get-default-argument =
+    path: v:
+    v.__default_argument or
+      (if isAttrs v && !(isFunction v)
+       then {}
+       else if isList v && length v > 0 then
+         get-default-argument path (head v)
+       else throw-error {
+         inherit path;
+         func = "get-default-argument";
+         msg = "attrpath does not exist in the target, but function infused to it is strict ${builtins.toXML v}";
+       });
+
+
+  ##############################################################################
+  # Desugaring
+  ##############################################################################
+
+  # each of the __foo functions below takes its argument exactly as it appears
+  # in the (sugared) infusion, and should return a *desugared* infusion.
+  default-sugars = let
+
+    __assign = path: value: _:
+      value;
+
+    __default = path: value: {
+      __functor = _: id;
+      __default_argument = value;
+    };
+
+    __init = let
+      # This uses [@sternenseeman's research][1] on the semantics of Nix function
+      # equality to create a special value which can never be (==)-equal to any
+      # value created outside of this file.
+      # [1]: https://code.tvl.fyi/tree/tvix/docs/src/value-pointer-equality.md
+      unique-marker = [ (_: throw "don't force this!") ];
+    in path: value: {
+      __default_argument = unique-marker;
+      __functor = _: prev:
+        if prev == unique-marker
+        then value
+        else throw-error {
+          inherit path;
+          func = "desugar";
+          msg = "infused a value to __init but attribute already existed (maybe you meant to use __assign or __default?) with value";
+        };
+    };
+
+    __underlay = path: overlay:
+      if isAttrs overlay then
+        __underlay path (_: flip-infuse path overlay)
+      else if isFunction overlay then {
+        __default_argument = final: prev: prev;
+        __functor = _: old: assert isFunction old; lib.composeExtensions overlay old;
+      } else
+        throw-error {
+          inherit path;
+          func = "prelay";
+          msg = "applied to unsupported type: ${typeOf overlay}";
+        };
+
+    __overlay = path: overlay:
+      if isAttrs overlay then
+        __overlay path (_: flip-infuse path overlay)
+      else if isFunction overlay then {
+        __default_argument = final: prev: prev;
+        __functor = _: old: assert isFunction old; lib.composeExtensions old overlay;
+      } else
+        throw-error {
+          inherit path;
+          func = "overlay";
+          msg = "applied to unsupported type: ${typeOf overlay}";
+        };
+
+    __prepend = path: infusion:
+      if isString infusion then {
+        __default_argument = "";
+        __functor = _: string: assert isString string; infusion + string;
+      } else if isList infusion then {
+        __default_argument = [];
+        __functor = _: list: assert isList list; infusion ++ list;
+      } else
+        throw-error {
+          inherit path;
+          func = "prepend";
+          msg = "applied to unsupported type: ${typeOf infusion}";
+        };
+
+    __append = path: infusion:
+      if isString infusion then {
+        __default_argument = "";
+        __functor = _: string: assert isString string; string + infusion;
+      } else if isList infusion then {
+        __default_argument = [];
+        __functor = _: list: assert isList list; list ++ infusion;
+      } else
+        throw-error {
+          inherit path;
+          func = "append";
+          msg = "applied to unsupported type: ${typeOf infusion}";
+        };
+
+    __input = path: infusion:
+      if isAttrs infusion
+      then __input path (previousArgs: flip-infuse path infusion previousArgs)
+      else if isFunction infusion
+      then old:
+        if old?override then old.override infusion
+        else if isFunction old then arg: old (infusion arg)
+        else
+          throw-error {
+            inherit path;
+            func = "input";
+            msg = "attempted to infuse a function to target.__input but !(isFunction target)";
+          }
+      else
+        throw-error {
+          inherit path;
+          func = "input";
+          msg = "infused an unsupported type to __input: ${typeOf infusion}";
+        };
+
+    __output = path: infusion:
+      if isAttrs infusion
+      then target: __output path (_: previousAttrs: flip-infuse path infusion previousAttrs) target
+      else if isFunction infusion
+      then target:
+        if isFunction target then arg: infusion (target arg)
+        else if isDerivation target && target?overrideAttrs
+        then
+          target.overrideAttrs
+            (final: prev:
+              let applied = infusion final; in
+              if !(isFunction applied)
+              then
+                throw-error
+                  {
+                    inherit path;
+                    func = "output";
+                    msg = "when infusing to drv.__output you must pass a *two*-argument curried function (i.e. `__output = finalAttrs: previousAttrs: ...`)";
+                  } else applied prev)
+        else
+          throw-error {
+            inherit path;
+            func = "input";
+            msg = "attempted to infuse to __output of an unsupported type: ${typeOf target}";
+          }
+      else
+        throw-error {
+          inherit path;
+          func = "output";
+          msg = "applied to unsupported type: ${typeOf infusion}";
+        };
+
+    __infuse = path: infusion:
+      desugar path infusion;
+
+    in [
+      (nameValuePair "__assign" __assign)
+      (nameValuePair "__default" __default)
+      (nameValuePair "__init" __init)
+      (nameValuePair "__underlay" __underlay)
+      (nameValuePair "__overlay" __overlay)
+      (nameValuePair "__prepend" __prepend)
+      (nameValuePair "__append" __append)
+      (nameValuePair "__input" __input)
+      (nameValuePair "__output" __output)
+      (nameValuePair "__infuse" __infuse)
+    ];
+
+  enabled-sugars =
+    if sugars != null
+    then sugars
+    else default-sugars;
+
+  sugar-map =
+    listToAttrs enabled-sugars;
+
+  sugar-list =
+    map (n: n.name) enabled-sugars;
+
+  remove-sugars =
+    path:
+    infusion:
+      lib.pipe infusion [
+        (lib.mapAttrs
+          (name: val: sugar-map.${name} (path ++ [ name ]) val))
+        (desugared:
+          (map (sugar-name: desugared.${sugar-name} or []) sugar-list))
+        flatten
+      ];
+
+  desugar = path: infusion:
+    if isFunction infusion then
+      infusion
+    else if (isList infusion) then
+      map (desugar path) infusion
+    else if !(isAttrs infusion) then
+      throw-error {
+        inherit path;
+        func = "desugar";
+        msg = "invalid type ${typeOf infusion}";
+      }
+    else if !(any (hasPrefix "__") (attrNames infusion)) then
+      mapAttrs (k: v: desugar (path ++ [ k ]) v) infusion
+    else if !(all (hasPrefix "__") (attrNames infusion)) then
+      throw-error
+        {
+          inherit path;
+          func = "desugar";
+          msg = "mixing special (hasPrefix \"__\") and non-special attributes at the same path level is not (yet) supported";
+        }
+    else
+      remove-sugars path infusion;
+
+in
+{
+
+  v1 =
+    let
+      toplevel = {
+        infuse = toplevel;
+        infuse-desugared = target: infusion:
+          flip-infuse-desugared-pruned [ ] infusion target;
+        desugar = infusion:
+          let result = desugar [ ] infusion;
+          in result;
+        __functor = self: target: infusion: flip-infuse [] infusion target;
+      };
+    in
+      toplevel;
+
+}
