@@ -176,23 +176,15 @@ let
   inherit (lib.generators)
     toPretty;
 
-  ##############################################################################
-  # Stuff that <nixpkgs/lib> ought to provide, but for some reason doesn't
-  ##############################################################################
-
   # Like `isAttrs`, but returns `false` for attrsets with `__functor` attributes.
   # This ought to be in <nixpkgs/lib>.
   isNonFunctorAttrs = v: (isAttrs v) && !(isFunction v);
 
   # `lib.pipe` is too strict because it uses builtins.foldl' (there is a test
   # case in tests/default.nix that will fail if `flip pipe` is used instead).
+  # This ought to be in <nixpkgs/lib>.
   flip-pipe-lazy =
     builtins.foldl' (f: g: x: g (f x)) id;
-
-
-  ##############################################################################
-  # utility/helper functions
-  ##############################################################################
 
   # Error reporting, including attrpath at which the error occurred
   throw-error =
@@ -211,25 +203,10 @@ let
     path: f: list:
     lib.imap0 (idx: v: f (path ++ ["[${toString idx}]"]) v) list;
 
-
-  ##############################################################################
-  # desugared infusions
-  ##############################################################################
-
   #
   # Replace any leafless attrsets anywhere within the infusion with `{}`
-  #
   # A leafless attrset is either `{}` or an attrset whose attrvalues are all
-  # leafless attrsets.
-  #
-  # Removing these from an infusion before infusing it is not just a performance
-  # optimization.  It is important that `infuse target { a.b.c = {}; }` does not
-  # create an attribute `a` if none existed already in `target`.  However the
-  # naive implementation, which checks for "is leafless" from within
-  # `flip-infuse-desugared-pruned`, has O(n^2) worst-case complexity, because
-  # knowing that `a` is leafless requires traversing arbitrarily deep (in this
-  # case, to `a.b.c`).  Therefore to preserve O(n) worst-case complexity we have
-  # to check for leafless attrsets in a separate pass.
+  # leafless attrsets.  See doc/design-notes-leafless-attrsets.md
   #
   prune =
     path:
