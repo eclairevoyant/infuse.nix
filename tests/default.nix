@@ -234,12 +234,10 @@ assert equal-infusions
   [ [ y-squared   y-cubed ] y-inc ]
   [   y-squared [ y-cubed   y-inc ] ];
 
-# identity law of attrset infusions:
-assert
-       infuse { y = any-integer; } [    y-squared {} ]
-  ==   infuse { y = any-integer; } [ {} y-squared    ];
-
-# a list of identically-attrnamed sets is equivalent to a 
+# attrset infusions: identity and associativity
+assert equal-infusions
+  [    y-squared {} ]
+  [ {} y-squared    ];
 assert
   flip infuse (lift-y (flip infuse [ squared inc ]))  y-any-integer
   ==
@@ -249,13 +247,10 @@ assert
 assert lib.pipe { y = any-integer; } (map (flip infuse) [ [ { y =   squared; } { y = inc; } ]      ])
   ==   lib.pipe { y = any-integer; } (map (flip infuse) [   { y =   squared; } { y = inc; }        ]);
 
-assert lib.pipe { y = any-integer; } (map (flip infuse) [ [ { y =   squared; } { y = inc; } ]      ])
-  ==   lib.pipe { y = any-integer; } (map (flip infuse) [   { y =   squared; } { y = inc; }        ]);
-
 # distributive law of `{}` over `[]` for one-element attrsets
 assert equal-infusions
-  ([   { y =   squared; } ] ++ [ { y = inc  ; }      ])
-  (    { y = [ squared    ] ++ [       inc ]; }       );
+            [ { y =   squared; } { y = inc; } ]
+  (zipAttrs [ { y =   squared; } { y = inc; } ]);
 
 
 ##############################################################################
