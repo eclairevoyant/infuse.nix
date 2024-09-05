@@ -403,7 +403,7 @@ let
         else throw-error {
           inherit path;
           func = "desugar";
-          msg = "infused a value to __init but attribute already existed (maybe you meant to use __assign or __default?) with value";
+          msg = "infused a value to __init but attribute already existed, value=${toPretty {} prev}; maybe you meant to use __assign or __default?";
         };
     };
 
