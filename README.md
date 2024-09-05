@@ -9,7 +9,8 @@
 `infuse` is a "deep" version of both `.override` and `.overrideAttrs` which
 generalizes both `lib.pipe` and `recursiveUpdate`.  It can be used as a leaner,
 untyped alternative to `lib.modules`.  If you want dynamic typechecking, it
-works well with [yants](https://code.tvl.fyi/tree/nix/yants/README.md).
+works well with [yants](https://code.tvl.fyi/tree/nix/yants/README.md).  Infusion has [specified semantics](default.nix#L47) which
+[preserve identity and associativity laws](#semantics) at all three of nix's non-finite types
 
 ## Why?
 
@@ -154,7 +155,7 @@ infuse an attrset whose desugaring contains any non-function leaf values.
 When you infuse a desugared infusion into a target, each function in the
 infusion is applied to the target attrvalue which has the same attrpath.
 
-## Semantics
+## Semantics {#semantics}
 
 Let's take a look at `lib.pipe`.  It has two important properties:
 
@@ -169,20 +170,17 @@ Infuse has both of these properties as well, when used on lists:
 What makes `infuse` special is that it also works on attrsets, and does so *in
 the same way* that it (and `lib.pipe`) work on lists:
 
-- `infuse {}` does the same thing as `lib.id`
-- `infuse (a // b)` does the same thing as `compose (flip infuse a) (flip infuse b)`
+- `flip infuse {}` does the same thing as `lib.id`
+- `flip infuse (a // b)` does the same thing as `compose (flip infuse a) (flip infuse b)`
 
 In fact, `infuse` does the same trick for functions too!
 
-- `infuse lib.id` does the same thing as `lib.id`
-- `infuse (compose a b)` does the same thing as `compose (flip infuse a) (flip infuse b)`
+- `flip infuse lib.id` does the same thing as `lib.id`
+- `flip infuse (compose a b)` does the same thing as `compose (flip infuse a) (flip infuse b)`
 
 Most important of all, these are not three *separate* tricks (one for lists, one
 for attrsets, and one for functions).  It is one single trick that works *at all
-three of the non-finite Nix types* (lists, attrsets, and functions).  The
-distributive laws above apply even when you mix the types:
-
-- `infuse (infuse (a // b) ++ c)` does the same thing as `
+three of the non-finite Nix types* (lists, attrsets, and functions).
 
 ## Examples
 
