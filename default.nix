@@ -91,7 +91,8 @@
 #   - To desugar an empty attrset `{}`, remove it.
 #   - To desugar a list, desugar its elements, apply `flip-infuse-desugared` to
 #     each element to create a function, and then apply `flip pipe` to the list
-#     of functions into a single function.
+#     of functions into a single function.  The `__default_arguments` attribute
+#     must be propagated from the head of the list.
 #   - To desugar an attrset having names which begin with "__", apply the
 #     attribute of `listToAttrs sugars` having the same name to it, and apply
 #     the results to the target in the same order in which they occur in
