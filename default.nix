@@ -30,7 +30,7 @@
 #         shallow = true;
 #         publicKey = "F0B74D717CDE8412A3E0D4D5F29AC8080DA8E1E0";
 #         keytype = "pgp-ed25519";
-#       }) { inherit lib; }).v1;
+#       }) { inherit lib; }).v1.infuse;
 # in
 #   ...
 #
@@ -128,14 +128,8 @@
 # failures.  Consider using `__assign = null` instead.
 #
 
-
-{ lib ? import <nixpkgs/lib> { }
-
-# If null, the default-sugars is used; otherwise this should be a list of
-# `lib.nameValuePair`s, each of which has the name (e.g. __input) of a sugar as
-# its attrname and a function `path: infusion: ...` as its value.  See below for
-# examples.
-, sugars ? null
+{ lib    ? import <nixpkgs/lib> { }
+, sugars ? null  # see `default-sugars` below for explanation
 , ...
 }:
 let
@@ -144,16 +138,16 @@ let
   # Conventions:
   #
   # - Functions with names ending in `-desugared` deal with infusions that have
-  #   been desugared (i.e. already fed through `desugar`)
+  #   already been desugared.
   #
   # - `flip-foo` is equivalent to `lib.flip foo`, except that the former
-  #    propagates __default_arguments.
+  #   propagates __default_arguments.
   #
   # - Non-exported functions all take an addtional `path` argument which is the
   #   attrpath at which they are being applied.  The `path` argument is used
   #   only for error reporting, so O(n^2) list-concatenations are okay; they
-  #   won't be forced unless an error is encountered.  These primed functions
-  #   are not exported.
+  #   won't be forced unless an error is encountered.  These path-accepting
+  #   functions are not exported and are not part of the stable API.
   #
 
   inherit (builtins)
@@ -166,8 +160,18 @@ let
   inherit (lib.generators)
     toPretty;
 
+  ##############################################################################
+  # Stuff that <nixpkgs/lib> ought to provide, but for some reason doesn't
+  ##############################################################################
+
   # Like `isAttrs`, but returns `false` for attrsets with `__functor` attributes.
+  # This ought to be in <nixpkgs/lib>.
   isNonFunctorAttrs = v: (isAttrs v) && !(isFunction v);
+
+  # `lib.pipe` is too strict because it uses builtins.foldl' (there is a test
+  # case in tests/default.nix that will fail if `flip pipe` is used instead).
+  flip-pipe-lazy =
+    builtins.foldl' (f: g: x: g (f x)) id;
 
   ##############################################################################
   # utility/helper functions
@@ -183,44 +187,6 @@ let
       where = optionalString (path!=null) "at path ${showAttrPath path}: ";
     in
       throw "infuse.${func}: ${where}${msg}";
-
-  #
-  # `lib.pipe` is too strict because it uses builtins.foldl'.  So we lift each
-  # function `f` in the pipeline to a suspension `(_: ...)`.  Basically the
-  # usual trick that Ocaml/ML programmers use when they want opt-in laziness,
-  # but here we're doing it in a language which is already lazy since its
-  # builtin primitives are too strict.
-  #
-  # We also optimize for two fast-path cases: [] and [f].
-  #
-  flip-pipe-lazy =
-    functions:
-    if functions == [] then
-      id
-    else if length functions == 1 then
-      head functions
-    else
-      val: lib.pipe
-        (_: val)
-        (map
-          (function:
-            suspended-val:
-            _: function (suspended-val null))
-          functions)
-        null;
-
-  # Returns true if all attrpaths lead to attrsets (i.e. no lists, functions, or
-  # ground types anywhere).
-  is-leafless-attrset = attrs:
-    let
-      values = attrValues attrs;
-    in
-      # This is written as the `&&` of two separate `all` invocations in order
-      # to short-circuit as quickly as possible in the most likely case where
-      # the result is `false`.  If we can return `false` without recursing to
-      # subattributes, that will be faster.
-      all isAttrs values &&
-      all is-leafless-attrset values;
 
   #
   # Replace any leafless attrsets anywhere within the infusion with `{}`
@@ -244,9 +210,8 @@ let
     then infusion
     else let
       pruned = mapAttrs (k: v: prune (path ++ [k]) v) infusion;
-      is-leafless = all (v: v == {}) (attrValues pruned);
     in
-      if is-leafless
+      if all (v: v == {}) (attrValues pruned)
       then {}
       else pruned;
 
@@ -317,16 +282,17 @@ let
 
     else mapAttrs (k: v: optimize-lists (path ++ [k]) v) infusion;
 
+  flip-infuse = path: infusion:
+    flip-infuse-desugared path (desugar path infusion);
 
   ##############################################################################
   # desugared infusions
   ##############################################################################
 
-  flip-infuse =
+  flip-infuse-desugared =
     path:
     infusion:
     lib.pipe infusion [
-      (desugar path)
       (prune path)
       (optimize-lists path)
       (flip-infuse-desugared-pruned path)
@@ -611,23 +577,15 @@ let
     else
       remove-sugars path infusion;
 
-in
-{
+  # versioned API
+  v1 = {
+    infuse = flip (flip-infuse [ ]);
+    desugar = desugar [ ];
+    infuse-desugared = flip (flip-infuse-desugared [ ]);
+  };
 
-  v1 =
-    let
-      toplevel = {
-        infuse = toplevel;
-        infuse-desugared = target: infusion:
-          flip-infuse-desugared-pruned [ ] infusion target;
-        desugar = infusion:
-          let result = desugar [ ] infusion;
-          in result;
-        __functor = self: target: infusion: flip-infuse [] infusion target;
-      };
-    in
-      toplevel;
-
+in {
+  inherit v1;
 }
 
 
