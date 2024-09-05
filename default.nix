@@ -145,6 +145,7 @@ let
     desugar = desugar [ ];
     infuse-desugared = flip (flip-infuse-desugared [ ]);
     optimize = optimize [ ];
+    inherit default-sugars;
   };
 
   # Everything from here to the end of this file is internal implementation
@@ -156,7 +157,7 @@ let
     concatStringsSep flip mapAttrs isFunction isAttrs isDerivation
     any all pipe showAttrPath nameValuePair listToAttrs
     zipAttrsWith isList isString id flatten filter hasPrefix
-    attrNames filterAttrs optionalString;
+    attrNames filterAttrs optionalString hasAttr;
   inherit (lib.generators)
     toPretty;
 
@@ -448,17 +449,6 @@ let
   sugar-list =
     map (n: n.name) enabled-sugars;
 
-  remove-sugars =
-    path:
-    infusion:
-      lib.pipe infusion [
-        (lib.mapAttrs
-          (name: val: sugar-map.${name} (path ++ [ name ]) val))
-        (desugared:
-          (map (sugar-name: desugared.${sugar-name} or []) sugar-list))
-        flatten
-      ];
-
   desugar = path: infusion:
     if isFunction infusion then
       infusion
@@ -479,8 +469,20 @@ let
           func = "desugar";
           msg = "mixing special (hasPrefix \"__\") and non-special attributes at the same path level is not (yet) supported";
         }
+    else if (any (name: !(hasAttr name sugar-map)) (attrNames infusion)) then
+      throw-error
+        {
+          inherit path;
+          func = "desugar";
+          msg = "infusion contains __-prefixed attrnames which are not in the sugar-map: ${filter (name: !(hasAttr sugar-map name)) (attrNames infusion)}";
+        }
     else
-      remove-sugars path infusion;
+      map
+        (sugar-name:
+          sugar-map.${sugar-name}
+            (path ++ [ sugar-name ])
+            infusion.${sugar-name})
+        (filter (name: hasAttr name infusion) sugar-list);
 
 
   ##############################################################################
