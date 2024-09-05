@@ -137,7 +137,6 @@ let
 
   ##############################################################################
   # Public API (versioned)
-  ##############################################################################
 
   v1 = {
     # the path-accepting forms are not public
@@ -147,25 +146,8 @@ let
     optimize = optimize [ ];
   };
 
-  ##############################################################################
-  # Everything below this point is internal implementation details
-  ##############################################################################
-
-  #
-  # Conventions:
-  #
-  # - Functions with names ending in `-desugared` deal with infusions that have
-  #   already been desugared.
-  #
-  # - `flip-foo` is equivalent to `lib.flip foo`, except that the former
-  #   propagates __default_arguments.
-  #
-  # - Non-exported functions all take an addtional `path` argument which is the
-  #   attrpath at which they are being applied.  The `path` argument is used
-  #   only for error reporting, so O(n^2) list-concatenations are okay; they
-  #   won't be forced unless an error is encountered.  These path-accepting
-  #   functions are not exported and are not part of the stable API.
-  #
+  # Everything from here to the end of this file is internal implementation
+  # details.
 
   inherit (builtins)
     typeOf length head tail attrValues intersectAttrs;
@@ -176,6 +158,10 @@ let
     attrNames filterAttrs optionalString;
   inherit (lib.generators)
     toPretty;
+
+
+  ##############################################################################
+  # Utility+Helper functions
 
   # Like `isAttrs`, but returns `false` for attrsets with `__functor` attributes.
   # This ought to be in <nixpkgs/lib>.
@@ -208,7 +194,6 @@ let
   # Replace any leafless attrsets anywhere within the infusion with `{}`
   # A leafless attrset is either `{}` or an attrset whose attrvalues are all
   # leafless attrsets.  See doc/design-notes-leafless-attrsets.md
-  #
   prune =
     path:
     infusion:
@@ -221,18 +206,24 @@ let
        then {}
        else pruned;
 
+
+  ##############################################################################
+  # Desugared Infusion
+
+  #
+  # The `flip-infuse*` functions are defined in argument-reversed form to avoid
+  # eta-expanding, which would turn a {__functor = ..., __default_argument =
+  # ...} into a normal function.  The exported API is `flip flip-*` (see `v1`).
+  #
+
   flip-infuse = path: infusion:
     flip-infuse-desugared path (desugar path infusion);
 
-  flip-infuse-desugared =
-    path:
-    infusion:
+  flip-infuse-desugared = path: infusion:
     flip-infuse-desugared-pruned path (prune path infusion);
 
-  # arguments are backwards here to avoid eta-expanding, which would turn a
-  # {__functor = ..., __default_argument = ...} into a normal function
   flip-infuse-desugared-pruned =
-    path: # attrpath relative to top-level call; only for error reporting
+    path:     # attrpath relative to top-level call; only for error reporting
     infusion: # infusion to infuse upon the target attrset
 
     let
@@ -287,7 +278,6 @@ let
 
   ##############################################################################
   # Desugaring
-  ##############################################################################
 
   # each of the __foo functions below takes its argument exactly as it appears
   # in the (sugared) infusion, and should return a *desugared* infusion.
@@ -486,9 +476,9 @@ let
     else
       remove-sugars path infusion;
 
+
   ##############################################################################
   # Optimizer
-  ##############################################################################
 
   # `infuse (infuse t a) b == compose-attrset-infusions a b` if both `a` and `b`
   # are attrsets.
@@ -545,13 +535,8 @@ let
         };
 
       merge = list: collapse (lib.foldl op nul list);
-
-    in lib.pipe infusion [
-      flatten
-      merge
-      #flatten  # should not be necessary
-      (map-with-path path optimize)
-    ];
+    in
+      map-with-path path optimize (merge (flatten infusion));
 
 in {
   inherit v1;
