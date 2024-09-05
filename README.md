@@ -1,5 +1,16 @@
 # infuse.nix
 
+- canonical repository: [https://git.sr.ht/~amjoseph/infuse.nix](https://git.sr.ht/~amjoseph/infuse.nix).
+- backup mirror: [https://codeberg.org/amjoseph/infuse.nix](https://codeberg.org/amjoseph/infuse.nix).
+- questions: `#six/hackint` (be patient, i am asynchronous)
+
+## What?
+
+`infuse.nix` is a "deep" version of both `.override` and `.overrideAttrs` which
+generalizes both `lib.pipe` and `recursiveUpdate`.  It can be used as a leaner,
+untyped alternative to `lib.modules`.  If you want dynamic typechecking, it
+works well with [yants](https://code.tvl.fyi/tree/nix/yants/README.md).
+
 ## Why?
 
 Would you rather write this:
