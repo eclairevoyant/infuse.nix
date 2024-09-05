@@ -93,50 +93,22 @@ in
 ```
 
 The process of replacing these double-underscore attributes by expanded
-definitions is called *desugaring*.  Two other things happen during desugaring:
+definitions is called *desugaring*.  After desugaring, what's left is a
+*desugared infusion*: an attrset whose leaf values are all functions -- no
+integers, booleans, strings, etc.  In other words: it is an error to try to
+infuse an attrset whose desugaring contains any non-function leaf values.
 
-1. All empty attrsets are deleted.
-
-2. Any lists within the infusion are desugared by applying `list: lib.pipe (map
-   desugar list)` to them.  In other words, the elements of the list are
-   (recursively) desugared and the resulting functions are composed as a pipeline.
-
-After desugaing, what's left is a *fundamental infusion*: an attrset whose leaf
-values are all functions -- no integers, booleans, strings, etc.  In other
-words: it is an error to try to infuse an attrset whose desugaring contains any
-non-function leaf values.
-
-When you infuse a fundamental infusion into a target, each function in the
+When you infuse a desugared infusion into a target, each function in the
 infusion is applied to the target attrvalue which has the same attrpath.
-
-```
-pkgs.xrdp = {                                          pkgs.xrdp = [
-
-  __input.systemd = {                                    (x: x.override (previousAttrs: { systemd =
-    __assign = null;                                       (_: null)
-  };                                                         previousAttrs.systemd))
-
-  __output = {                                           (x: x.overrideAttrs (previousAttrs: {
-    passthru.xorgxrdp = {                                  passthru.xorgxrdp = {
-      __output.configureFlags = [                            __output.configureFlags = [
-        { __append = ["--without-fuse"]; }                     { __append = ["--without-fuse"]; }
-        (lib.filter                                            (lib.filter
-          (lib.hasPrefix                                         (lib.hasPrefix
-            "--with-systemdsystemunitdir="))                       "--with-systemdsystemunitdir="))
-      ];                                                     ];
-    };                                                     };
-  };                                                     };
-};                                                     };
-```
 
 
 ## How?
 
-The basic idea is that `infuse` acts like `lib.recursiveUpdate`, except that in
-the second (right-hand) argument you must *mark* any subtrees where you want the
-automatic merging to stop.  You mark those subtrees by changing them from
-whatever value they were into a function which returns that value (and ignores
-its argument).
+The basic idea is that when its second argument is an attrset, `infuse` acts
+like `lib.recursiveUpdate`, except that in the second argument you must *mark*
+any subtrees where you want the automatic merging to stop.  You mark those
+subtrees by changing them from whatever value they were into a function which
+returns that value (and ignores its argument).
 
 In the following example, `fred` gets clobbered because we used `//`:
 
@@ -163,10 +135,24 @@ replace each other (or report an error) rather than getting mixed together.
 
 ### Lists
 
-If you infuse a list to something, it acts like `lib.pipe`:
+When the second argument is a list, `infuse` acts like `lib.pipe`:
 
 ```nix
-infuse { bob.fred.x = 3; } { bob.fred = [ { x = x: x*x; } (fred: fred.x+1) ]; }) == { bob.fred = 10; }
+infuse
+   { x = 3; }
+   [ { x = x: x*x; } (fred: fred.x+1) ]
+==
+   10
+```
+
+You can even mix lists with attrsets:
+
+```nix
+infuse
+   { bob.fred.x = 3; }
+   { bob.fred = [ { x = x: x*x; } (fred: fred.x+1) ]; }
+==
+   { bob.fred = 10; }
 ```
 
 ### Desugaring

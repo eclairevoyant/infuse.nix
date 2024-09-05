@@ -91,12 +91,22 @@ assert
     foo.newattr = 9;
   };
 
-# tutorial examples
+# readme examples
 assert        ({ bob.fred = 3; } // { bob.jill = 4; }) == { bob.jill = 4; };
 assert (infuse { bob.fred = 3; } { bob.jill = _: 4; }) == { bob.fred = 3; bob.jill = 4; };
 assert (infuse { bob.fred = 3; } { bob = _: { jill = 4; }; }) == { bob.jill = 4; };
 assert (infuse { bob.fred = 3; } { bob.fred = [ (x: x + 1) (x: x * x) ]; }) == { bob.fred = 16; };
 assert (infuse { bob.fred.x = 3; } { bob.fred = [{ x = x: x * x; } (fred: fred.x + 1)]; }) == { bob.fred = 10; };
+assert (infuse
+   { bob.fred.x = 3; }
+   { bob.fred = [ { x = x: x*x; } (fred: fred.x+1) ]; }
+==
+   { bob.fred = 10; });
+assert (infuse
+   { x = 3; }
+   [ { x = x: x*x; } (fred: fred.x+1) ]
+==
+   10);
 
 # function
 assert (infuse { a = 3; } (lib.mapAttrs (_: v: v * v))) == { a = 9; };
