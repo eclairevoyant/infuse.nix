@@ -190,7 +190,26 @@ let
     path: f: list:
     lib.imap0 (idx: v: f (path ++ ["[${toString idx}]"]) v) list;
 
-  #
+  # see doc/design-notes-on-missing-attributes.md
+  get-default-argument =
+    path: infusion:
+    infusion.__default_argument or
+      (if isNonFunctorAttrs infusion
+       then {}
+       else if isList infusion
+       then if length infusion != 0
+            then get-default-argument path (head infusion)
+            else throw-error {
+              inherit path;
+              func = "get-default-argument";
+              msg = "attrpath does not exist in the target, but the empty list [] was infused to it";
+            }
+       else throw-error {
+         inherit path;
+         func = "get-default-argument";
+         msg = "attrpath does not exist in the target, but function infused to it is strict ${builtins.toXML infusion}";
+       });
+
   # Replace any leafless attrsets anywhere within the infusion with `{}`
   # A leafless attrset is either `{}` or an attrset whose attrvalues are all
   # leafless attrsets.  See doc/design-notes-leafless-attrsets.md
@@ -260,20 +279,6 @@ let
             flip-infuse-desugared-pruned (path ++ [ k ]) v
               (target.${k} or (get-default-argument path v)))
           infusion);
-
-  # see doc/design-notes-on-missing-attributes.md
-  get-default-argument =
-    path: v:
-    v.__default_argument or
-      (if isAttrs v && !(isFunction v)
-       then {}
-       else if isList v && length v > 0 then
-         get-default-argument path (head v)
-       else throw-error {
-         inherit path;
-         func = "get-default-argument";
-         msg = "attrpath does not exist in the target, but function infused to it is strict ${builtins.toXML v}";
-       });
 
 
   ##############################################################################
