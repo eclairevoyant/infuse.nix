@@ -186,6 +186,6 @@ distributive laws above apply even when you mix the types:
 
 ## Examples
 
-For an example of what `infuse.nix` can do, see [amjoseph's overlays](example.md).
+For an example of what `infuse.nix` can do, see [amjoseph's overlays](examples/amjoseph-overlays.nix).
 
 
