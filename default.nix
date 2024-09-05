@@ -188,6 +188,12 @@ let
     in
       throw "infuse.${func}: ${where}${msg}";
 
+  # like `builtin.map`, but for functions that take an additional `path`
+  # argument.  Type: [String] -> ([String] -> a -> b) -> [a] -> [b]
+  map-with-path =
+    path: f: list:
+    lib.imap0 (idx: v: f (path ++ ["[${toString idx}]"]) v) list;
+
   #
   # Replace any leafless attrsets anywhere within the infusion with `{}`
   #
@@ -270,7 +276,7 @@ let
       flatten
       merge
       #flatten  # should not be necessary
-      (lib.imap0 (idx: v: optimize-lists (path ++ ["[${toString idx}]"]) v))
+      (map-with-path path optimize-lists)
     ]
 
     # necessary because `isAttrs` returns `true` for functors
@@ -315,10 +321,7 @@ let
     then infusion
 
     else if isList infusion
-    then pipe infusion [
-      (lib.imap0 (idx: flip-infuse-desugared-pruned (path ++ ["[${toString idx}]"])))
-      flip-pipe-lazy
-    ]
+    then flip-pipe-lazy (map-with-path path flip-infuse-desugared-pruned infusion)
 
     else if !(isAttrs infusion)
     then throw-err "desugared infusions must contain only functions, lists, and attrsets; found a ${typeOf infusion}"
