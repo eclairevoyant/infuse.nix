@@ -422,14 +422,6 @@ let
   # in the (sugared) infusion, and should return a *desugared* infusion.
   default-sugars = let
 
-    __assign = path: value: _:
-      value;
-
-    __default = path: value: {
-      __functor = _: id;
-      __default_argument = value;
-    };
-
     __init = let
       # This uses [@sternenseeman's research][1] on the semantics of Nix function
       # equality to create a special value which can never be (==)-equal to any
@@ -447,6 +439,14 @@ let
           msg = "infused a value to __init but attribute already existed (maybe you meant to use __assign or __default?) with value";
         };
     };
+
+    __default = path: value: {
+      __functor = _: id;
+      __default_argument = value;
+    };
+
+    __assign = path: value: _:
+      value;
 
     __underlay = path: overlay:
       if isAttrs overlay then
@@ -558,9 +558,9 @@ let
       desugar path infusion;
 
     in [
-      (nameValuePair "__assign" __assign)
-      (nameValuePair "__default" __default)
       (nameValuePair "__init" __init)
+      (nameValuePair "__default" __default)
+      (nameValuePair "__assign" __assign)
       (nameValuePair "__underlay" __underlay)
       (nameValuePair "__overlay" __overlay)
       (nameValuePair "__prepend" __prepend)
