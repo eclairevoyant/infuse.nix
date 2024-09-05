@@ -5,8 +5,21 @@
 Would you rather write this:
 
 ```nix
-pkgs // {
-  xrdp = (pkgs.xrdp.override {
+final: prev: {
+
+  python311 = prev.python311.override
+    (previousArgs: previousArgs // {
+      packageOverrides =
+        lib.composeExtensions
+          (previousArgs.packageOverrides or {})
+          (final: prev: {
+            dnspython = prev.dnspython.overrideAttrs(previousAttrs: {
+              doCheck = false;
+            });
+          });
+    });
+
+  xrdp = (prev.xrdp.override {
       systemd = null;
     })
     .overrideAttrs(previousAttrs: {
@@ -30,11 +43,15 @@ pkgs // {
 ... or this?
 
 ```nix
-infuse pkgs {
+final: prev: infuse prev {
+
+  python311.__input.packageOverrides.__overlay.dnspython.__output.doCheck.__assign = false;
+
   xrdp.__input.systemd._assign = null;
   xrdp.__output.env.NIX_CFLAGS_COMPILE.__append = " -w";
   xrdp.__output.passthru.xorgxrdp.__output.configureFlags.__append = ["--without-fuse"];
-};
+
+}
 ```
 
 If you think the second expression is easier to read, write, and maintain, you
