@@ -280,6 +280,7 @@ assert expect-throw (infuse { x = 4; } { y = []; }).y;
 
 # however we can pass `infuse.missing` along a pipeline:
 assert (infuse { x = 4; } { y = [ (_: 3) ]; } == { x = 4; y = 3; });
+# the following test will fail if `flip-pipe-lazy` is replaced with `flip pipe`
 assert (infuse { x = 4; } { y = [ (x: x) (_: 3) ] ; } == { x = 4; y = 3; });
 
 # we also need to check the "distributive law" for these error cases:
