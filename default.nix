@@ -1,6 +1,6 @@
 ############################################################################
 #
-# version 0.9
+# version 1.0
 #
 # `infuse.nix` is a "deep" version of both `.override` and `.overrideAttrs` which
 # generalizes both `lib.pipe` and `recursiveUpdate`.  It can be used as a leaner,
