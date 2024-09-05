@@ -1,6 +1,13 @@
 #!/usr/bin/env -S nix-instantiate --eval --arg dummy null --show-trace
 # `--arg dummy null` is needed in order to trigger default args behavior
 
+#
+# TODO:
+# - Need test cases to check that `sugars` are applied in proper order
+#
+#
+
+
 { lib ? pkgs.lib
 # pinned in order to keep the tests deterministic
 , pkgs ? import (builtins.fetchTarball {
