@@ -315,7 +315,7 @@ let
       value;
 
     __underlay = path: overlay:
-      if isAttrs overlay then
+      if isNonFunctorAttrs overlay then
         __underlay path (_: flip-infuse path overlay)
       else if isFunction overlay then {
         __default_argument = final: prev: prev;
@@ -328,7 +328,7 @@ let
         };
 
     __overlay = path: overlay:
-      if isAttrs overlay then
+      if isNonFunctorAttrs overlay then
         __overlay path (_: flip-infuse path overlay)
       else if isFunction overlay then {
         __default_argument = final: prev: prev;
@@ -369,7 +369,7 @@ let
         };
 
     __input = path: infusion:
-      if isAttrs infusion
+      if isNonFunctorAttrs infusion
       then __input path (previousArgs: flip-infuse path infusion previousArgs)
       else if isFunction infusion
       then old:
@@ -389,7 +389,7 @@ let
         };
 
     __output = path: infusion:
-      if isAttrs infusion
+      if isNonFunctorAttrs infusion
       then target: __output path (_: previousAttrs: flip-infuse path infusion previousAttrs) target
       else if isFunction infusion
       then target:
