@@ -69,39 +69,6 @@ If you think the second expression is easier to read, write, and maintain, you
 would probably be interested in `infuse.nix`.
 
 
-## There is No Magic Under the Hood
-
-All those double-underscore attributes you see, like `__input` and `__output`
-are just *sugar*.  You can omit them, or even define your own sugars:
-
-```nix
-let
-  infuse = import ../default.nix {
-    inherit lib;
-    sugars = infuse.v1.default-sugars ++ lib.attrsToList {
-      __concatStringsSep =
-        path: infusion: target:
-          lib.strings.concatStringsSep infusion target;
-    };
-  };
-in
-  infuse.v1.infuse
-    { fred = [ "woo" "hoo" ]; }
-    { fred.__concatStringsSep = "-"; }
-  ==
-    { fred = "woo-hoo"; }
-```
-
-The process of replacing these double-underscore attributes by expanded
-definitions is called *desugaring*.  After desugaring, what's left is a
-*desugared infusion*: an attrset whose leaf values are all functions -- no
-integers, booleans, strings, etc.  In other words: it is an error to try to
-infuse an attrset whose desugaring contains any non-function leaf values.
-
-When you infuse a desugared infusion into a target, each function in the
-infusion is applied to the target attrvalue which has the same attrpath.
-
-
 ## How?
 
 The basic idea is that when its second argument is an attrset, `infuse` acts
@@ -155,17 +122,37 @@ infuse
    { bob.fred = 10; }
 ```
 
-### Desugaring
+## There is No Magic Under the Hood
 
-That's all there is to know about the `infuse-desugared`, which is the
-fundamental operation for the infuse library.
+All those double-underscore attributes you see, like `__input` and `__output`
+are just *sugar*.  You can omit them, or even define your own sugars:
 
-The more-general `infuse` function -- which supports the fancy `__input`,
-`__output`, `__append`, and `__prepend` attributes -- simply feeds its infusion
-through a desugaring function which turns an infusion with these special
-attribute into a *desugared infusion* which uses only functions and lists.  If
-you don't need the fancy `__`-prefixed attributes you can call
-`infuse-desugared` directly.
+```nix
+let
+  infuse = import ../default.nix {
+    inherit lib;
+    sugars = infuse.v1.default-sugars ++ lib.attrsToList {
+      __concatStringsSep =
+        path: infusion: target:
+          lib.strings.concatStringsSep infusion target;
+    };
+  };
+in
+  infuse.v1.infuse
+    { fred = [ "woo" "hoo" ]; }
+    { fred.__concatStringsSep = "-"; }
+  ==
+    { fred = "woo-hoo"; }
+```
+
+The process of replacing these double-underscore attributes by expanded
+definitions is called *desugaring*.  After desugaring, what's left is a
+*desugared infusion*: an attrset whose leaf values are all functions -- no
+integers, booleans, strings, etc.  In other words: it is an error to try to
+infuse an attrset whose desugaring contains any non-function leaf values.
+
+When you infuse a desugared infusion into a target, each function in the
+infusion is applied to the target attrvalue which has the same attrpath.
 
 ## Semantics
 
