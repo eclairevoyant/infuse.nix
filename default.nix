@@ -26,8 +26,8 @@
 #       (builtins.fetchGit {
 #         url  = "https://git.sr.ht/~amjoseph/infuse.nix";
 #         name = "infuse.nix";
-#         ref  = "refs/tags/v0.9";
-#         rev  = "b60f2e2dc04cde5c367fc367d1f145d282c7b41d";
+#         ref  = "refs/tags/v1.0";
+#         rev  = "2cfdac268f1027de276a4b94226d1e51fe2ae86d";
 #         shallow = true;
 #         publicKey = "F0B74D717CDE8412A3E0D4D5F29AC8080DA8E1E0";
 #         keytype = "pgp-ed25519";
