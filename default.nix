@@ -6,49 +6,42 @@
 # both .override and .overrideAttrs which generalizes both `lib.pipe`; can
 # be used as a leaner untyped alternative to lib.modules; works well with yants.
 #
-############################################################################
-#
 # Copyright (c) 2024 amjoseph F0B74D717CDE8412A3E0D4D5F29AC8080DA8E1E0
-# You may copy and modify this subject to the following (MIT) license
+# You may copy and modify this subject to the (MIT) license a the end
+# of this file.
 #
-# Permission is hereby granted, free of charge, to any person obtaining
-# a copy of this software and associated documentation files (the
-# "Software"), to deal in the Software without restriction, including
-# without limitation the rights to use, copy, modify, merge, publish,
-# distribute, sublicense, and/or sell copies of the Software, and to
-# permit persons to whom the Software is furnished to do so, subject to
-# the following conditions:
+#   canonical source: https://git.sr.ht/~amjoseph/infuse.nix
+#   backup mirror:    https://codeberg.org/amjoseph/infuse.nix
+#   questions:        #six/hackint (be patient, i am asynchronous)
 #
-# The above copyright notice and this permission notice shall be
-# included in all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-# LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-#
-############################################################################
-#
-# The canonical sources for this project are:
-#
-#   (primary) https://git.sr.ht/~amjoseph/infuse.nix/tree/trunk/item/default.nix
-#   (backup)  https://codeberg.org/amjoseph/infuse.nix/src/branch/trunk/default.nix
-#
-# Questions? #six https://hackint.org/
-#
-#                               ** VENDOR ME! **
+#                        ****** VENDOR ME! ******
 #
 # This file is self-contained and has no dependencies other than <nixpkgs/lib>;
-# you should copy it into your own project.
+# you should copy it into your own project.  Or, you can also do this:
+#
+# let
+#   infuse =
+#     (import
+#       (builtins.fetchGit {
+#         url  = "https://git.sr.ht/~amjoseph/infuse.nix";
+#         name = "infuse.nix";
+#         ref  = "refs/tags/v0.9";
+#         rev  = "b60f2e2dc04cde5c367fc367d1f145d282c7b41d";
+#         shallow = true;
+#         publicKey = "F0B74D717CDE8412A3E0D4D5F29AC8080DA8E1E0";
+#         keytype = "pgp-ed25519";
+#       }) { inherit lib; }).v1;
+# in
+#   ...
 #
 ############################################################################
-
-
-
-############################################################################
+#
+# Vocabulary
+#
+# The preferred English translation of the nix expression `infuse target inf` is
+# "infuse `target` with `inf`".  This matches the argument order, making it
+# easier to remember.  Another way to remember the argument order is to keep in
+# mind that `infuse` can always be used in place of `lib.pipe`.
 #
 # Specification
 #
@@ -58,78 +51,81 @@
 # tests/default.nix, along with test cases which demonstrate them.
 #
 # A *desugared infusion* is defined (inductively) as a function or a non-empty
-# attrset whose values are desugared infusions.
+# attrset whose attrvalues are desugared infusions.
 #
 # The result of *infusing* a target (which may not exist) with a desugared
 # infusion is defined inductively based on the type of the infusion:
 #
 # - for a function,
-#   - the function applied to:
-#     - if the target exists, the target
-#     - if the target does not exist, the function's __default_argument attribute
-# - for an attrset:
-#   - if the target is a derivation: throw an error
-#   - if the target is not an attrset: throw an error
-#   - if the target is a non-derivation attrset: the target updated (//) with an
-#     attrset formed by infusing each attribute of the infusion upon the target
-#     attrvalue having the same name if one exists.
+#   - if the target exists, the result is the function applied to the target
+#   - if the target does not exist,
+#     - if the function is *not* a `__functor`, the result is an error
+#     - if the function is a `__functor`, then the result is the function
+#       applied to the function's __default_argument attribute.
+# - for an attrset,
+#   - if the target is a derivation: the result is an error
+#   - if the target is not an attrset: the result is an error
+#   - if the target is a non-derivation attrset: the result is the target
+#     updated (//) with an attrset formed by infusing into each target attrvalue
+#     the infusion attrvalue with the same name, if one exists.
 #
 # An important property of this encoding is that it is totally collision-free.
 # There are no special attribute names or special values: desugared infusions
 # can act upon any attrset, even attrsets with names like `__append` and values
 # like `null` or `throw "fail"`.
 #
+# An *infusion* is defined the same way as a desugared infusion, except that:
 #
-# A (sugared) *infusion* is defined the same way as a desugared infusion, except
-# that:
-#
+#   - A sugared infusion may be an empty attrset `{}`
 #   - A sugared infusion may be a list of sugared infusions.
 #   - If a sugared infusion is an attrset and any of its attrnames begin with
 #     the two-character prefix "__" (double underscore), then:
+#     - *all* of its attrnames must begin with "__" and
 #     - its attrvalues may be *any* Nix value
-#     - *all* of its attrnames must begin with "__"
 #
 # In other words, a sugared infusion may not mix __-prefixed attributes and
 # non-__-prefixed attributes in the same attrset.
 #
 # To *desugar* an infusion, do the following recursively, depth-first:
 #
+#   - To desugar an empty attrset `{}`, remove it.
 #   - To desugar a list, desugar its elements, apply `flip-infuse-desugared` to
-#     each element to create a function, and then apply `flip pipe` to pipeline
-#     the list of functions into a single function.
-#
+#     each element to create a function, and then apply `flip pipe` to the list
+#     of functions into a single function.
 #   - To desugar an attrset having names which begin with "__", apply the
-#     `desugar` function.  The result of desugaring these attribute sets is a
-#     list containing one element for each attribute in the sugar-map; the value
-#     of the element is the sugar-map attrvalue applied to the infusion
-#     attrvalue of the same name, or [] if no such infusion attrvalue exists.
-#     The order of the elements within this list is currently fixed, and
-#     customizing the sugar-map is not supported.
+#     attribute of `listToAttrs sugars` having the same name to it, and apply
+#     the results to the target in the same order in which they occur in
+#     the list `sugars`.
 #
-# The sugar-map is a parameter to this file and can be customized.  The default
-# value currently has these attributes, processed in this order:
+# The set of `sugars` is a parameter to this file and can be customized.  The
+# default value currently has these attributes, which are applied in this order:
 #
-# __assign   # assign a new attrvalue
-# __default  # assign a new attrvalue only if none already existed
-# __init     # assign a new attrvalue if none existed; otherwise `throw`
+# __init      # assign a new value if none existed in the target; otherwise `throw`
+# __default   # assign a new value only if none already existed in the target
+# __assign    # assign a new value, ignoring the target value
 #
-# __underlay # pre-extend an overlay by adding another one which acts before it
-# __overlay  # post-extend an overlay by adding another one which acts after it
+# __underlay  # pre-extend an overlay by adding another one before it (see note)
+# __overlay   # post-extend an overlay by adding another one after it (see note)
 #
-# __prepend  # prepend a string or list
-# __append   # append a string or list
+# __prepend   # prepend a string or list to the target value
+# __append    # append a string or list to the target value
 #
-# __input    # invoke .override
-# __output   # invoke .overrideAttrs
+# __input     # invoke .override (see note)
+# __output    # invoke .overrideAttrs (see note)
 #
-# __infuse   # `infuse target { __infuse = f; }` is the same as `infuse target f`
+# __infuse    # `infuse target { __infuse = f; }` is the same as `infuse target f`
+#
+# Note: __underlay, __overlay, __input, and __output expect the sugared infusion
+# attrvalue to be a function.  However it can also be an attrset; in that case
+# the attrset is assumed to be a sugared infusion, and will be desugared and
+# converted into a function:
+#
+# - for __input:                       `(   prev: infuse prev attrs)`
+# - for __output __underlay __overlay: `(_: prev: infuse prev attrs)`
 #
 # There is no `__remove` because Nix attrsets are strict in their attrnames;
 # deleting attribute names from an attrset tends to cause infinite recursion
 # failures.  Consider using `__assign = null` instead.
-#
-# The result of infusing a target with a infusion is the result of infusing the
-# target with the desugared infusion.
 #
 
 
@@ -633,3 +629,28 @@ in
       toplevel;
 
 }
+
+
+############################################################################
+#
+# LICENSE
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+# LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#
