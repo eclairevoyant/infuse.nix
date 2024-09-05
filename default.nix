@@ -128,11 +128,27 @@
 # failures.  Consider using `__assign = null` instead.
 #
 
-{ lib    ? import <nixpkgs/lib> { }
-, sugars ? null  # see `default-sugars` below for explanation
+{ lib       ? import <nixpkgs/lib> { }
+, sugars    ? null  # see `default-sugars` below for explanation
 , ...
 }:
 let
+
+  ##############################################################################
+  # Public API (versioned)
+  ##############################################################################
+
+  v1 = {
+    # the path-accepting forms are not public
+    infuse = flip (flip-infuse [ ]);
+    desugar = desugar [ ];
+    infuse-desugared = flip (flip-infuse-desugared [ ]);
+    optimize = optimize [ ];
+  };
+
+  ##############################################################################
+  # Everything below this point is internal implementation details
+  ##############################################################################
 
   #
   # Conventions:
@@ -173,6 +189,7 @@ let
   flip-pipe-lazy =
     builtins.foldl' (f: g: x: g (f x)) id;
 
+
   ##############################################################################
   # utility/helper functions
   ##############################################################################
@@ -193,6 +210,11 @@ let
   map-with-path =
     path: f: list:
     lib.imap0 (idx: v: f (path ++ ["[${toString idx}]"]) v) list;
+
+
+  ##############################################################################
+  # desugared infusions
+  ##############################################################################
 
   #
   # Replace any leafless attrsets anywhere within the infusion with `{}`
@@ -216,95 +238,18 @@ let
     then map-with-path path prune infusion
     else if !(isNonFunctorAttrs infusion)
     then infusion
-    else let
-      pruned = mapAttrs (k: v: prune (path ++ [k]) v) infusion;
-    in
-      if all (v: v == {}) (attrValues pruned)
-      then {}
-      else pruned;
-
-  # `infuse (infuse t a) b == compose-attrset-infusions a b` if both `a` and `b`
-  # are attrsets.
-  compose-attrset-infusions =
-    a: b:
-    assert isAttrs a;
-    assert isAttrs b;
-    (a // b)
-    //
-    mapAttrs
-      (k: _:
-        let
-          composed = flatten [ (a.${k}) (b.${k}) ];
-        in
-          # uncommnent this line to trace optimizations
-          #lib.warn "compose-attrset-infusions ${toPretty {} a} ${toPretty {} b} = ${toPretty {} composed}"
-            composed
-      )
-      (intersectAttrs a b)
-  ;
-
-  # Flatten any nested lists, then merge any contiguous sequences of attrsets
-  # within a list using the (//) operator.  This exploits the "distributive law
-  # of `//` over `[]`
-  optimize-lists =
-    path:
-    infusion:
-
-    if isList infusion
-    then let
-
-      # an "accumulator" -- consists of a list of infusions `list` followed by
-      # an optional single attrset infusion `set`
-      nul = { list = []; set = null; };
-
-      # collapses an accumulator into a single list-infusion
-      collapse = acc: acc.list ++ lib.optionals (acc.set != null) [ acc.set ];
-
-      op = acc: next:
-        if isNonFunctorAttrs next
-        then {
-          inherit (acc) list;
-          set = if acc.set == null
-                then next
-                else compose-attrset-infusions acc.set next;
-        } else {
-          list = (collapse acc) ++ [ next ];
-          set = null;
-        };
-
-      merge = list: collapse (lib.foldl op nul list);
-
-    in lib.pipe infusion [
-      flatten
-      merge
-      #flatten  # should not be necessary
-      (map-with-path path optimize-lists)
-    ]
-
-    # necessary because `isAttrs` returns `true` for functors
-    else if isFunction infusion
-    then infusion
-
-    else if !(isAttrs infusion)
-    then infusion
-
-    else mapAttrs (k: v: optimize-lists (path ++ [k]) v) infusion;
+    else let pruned = mapAttrs (k: v: prune (path ++ [k]) v) infusion;
+    in if all (v: v == {}) (attrValues pruned)
+       then {}
+       else pruned;
 
   flip-infuse = path: infusion:
     flip-infuse-desugared path (desugar path infusion);
 
-  ##############################################################################
-  # desugared infusions
-  ##############################################################################
-
   flip-infuse-desugared =
     path:
     infusion:
-    lib.pipe infusion [
-      (prune path)
-      (optimize-lists path)
-      (flip-infuse-desugared-pruned path)
-    ];
+    flip-infuse-desugared-pruned path (prune path infusion);
 
   # arguments are backwards here to avoid eta-expanding, which would turn a
   # {__functor = ..., __default_argument = ...} into a normal function
@@ -329,7 +274,10 @@ let
     then throw-err "desugared infusions must contain only functions, lists, and attrsets; found a ${typeOf infusion}"
 
     else
+
     target: # target attrset to be infused with the infusion
+    # we float the `target:` lambda *inward* to encourage thunk-sharing
+
     if isDerivation target
     then throw-err "attempted to infuse to subattributes of a derivation (did you forget to use desugar?)"
 
@@ -582,12 +530,72 @@ let
     else
       remove-sugars path infusion;
 
-  # versioned API
-  v1 = {
-    infuse = flip (flip-infuse [ ]);
-    desugar = desugar [ ];
-    infuse-desugared = flip (flip-infuse-desugared [ ]);
-  };
+  ##############################################################################
+  # Optimizer
+  ##############################################################################
+
+  # `infuse (infuse t a) b == compose-attrset-infusions a b` if both `a` and `b`
+  # are attrsets.
+  compose-attrset-infusions =
+    a: b:
+    assert isAttrs a;
+    assert isAttrs b;
+    (a // b)
+    //
+    mapAttrs
+      (k: _:
+        let
+          composed = flatten [ (a.${k}) (b.${k}) ];
+        in
+          # uncommnent this line to trace optimizations
+          #lib.warn "compose-attrset-infusions ${toPretty {} a} ${toPretty {} b} = ${toPretty {} composed}"
+            composed
+      )
+      (intersectAttrs a b)
+  ;
+
+  # Flatten any nested lists, then merge any contiguous sequences of attrsets
+  # within a list using the (//) operator.  This exploits the "distributive law
+  # of `//` over `[]`
+  optimize =
+    path:
+    infusion:
+
+    if isNonFunctorAttrs infusion
+    then mapAttrs (k: v: optimize (path ++ [k]) v) infusion
+
+    else if !(isList infusion)
+    then infusion
+
+    else let
+
+      # an "accumulator" -- consists of a list of infusions `list` followed by
+      # an optional single attrset infusion `set`
+      nul = { list = []; set = null; };
+
+      # collapses an accumulator into a single list-infusion
+      collapse = acc: acc.list ++ lib.optionals (acc.set != null) [ acc.set ];
+
+      op = acc: next:
+        if isNonFunctorAttrs next
+        then {
+          inherit (acc) list;
+          set = if acc.set == null
+                then next
+                else compose-attrset-infusions acc.set next;
+        } else {
+          list = (collapse acc) ++ [ next ];
+          set = null;
+        };
+
+      merge = list: collapse (lib.foldl op nul list);
+
+    in lib.pipe infusion [
+      flatten
+      merge
+      #flatten  # should not be necessary
+      (map-with-path path optimize)
+    ];
 
 in {
   inherit v1;

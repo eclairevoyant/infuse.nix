@@ -25,7 +25,10 @@
 let
   inherit (lib) flip pipe zipAttrs id mapAttrs;
   inherit (builtins) tryEval deepSeq;
-  inherit ((import ./.. { inherit lib; }).v1) infuse;
+  inherit (import ./.. { inherit lib; }) v1;
+
+  # we want to test the optimizer too
+  infuse = target: infusion: v1.infuse target (v1.optimize infusion);
 
   toPretty = v: lib.generators.toPretty {} v;
   tryEvalDeep = expr: tryEval (deepSeq expr expr);
