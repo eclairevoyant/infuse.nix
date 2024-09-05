@@ -2,9 +2,10 @@
 #
 # version 0.9
 #
-# infuse.nix: generalizes both lib.pipe and recursiveUpdate; "deep" version of
-# both .override and .overrideAttrs which generalizes both `lib.pipe`; can
-# be used as a leaner untyped alternative to lib.modules; works well with yants.
+# `infuse.nix` is a "deep" version of both `.override` and `.overrideAttrs` which
+# generalizes both `lib.pipe` and `recursiveUpdate`.  It can be used as a leaner,
+# untyped alternative to `lib.modules`.  If you want dynamic typechecking, it
+# works well with [yants](https://code.tvl.fyi/tree/nix/yants/README.md).
 #
 # Copyright (c) 2024 amjoseph F0B74D717CDE8412A3E0D4D5F29AC8080DA8E1E0
 # You may copy and modify this subject to the (MIT) license a the end
