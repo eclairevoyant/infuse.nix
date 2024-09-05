@@ -6,7 +6,7 @@
 
 ## What?
 
-`infuse.nix` is a "deep" version of both `.override` and `.overrideAttrs` which
+`infuse` is a "deep" version of both `.override` and `.overrideAttrs` which
 generalizes both `lib.pipe` and `recursiveUpdate`.  It can be used as a leaner,
 untyped alternative to `lib.modules`.  If you want dynamic typechecking, it
 works well with [yants](https://code.tvl.fyi/tree/nix/yants/README.md).
@@ -67,21 +67,6 @@ final: prev: infuse prev {
 
 If you think the second expression is easier to read, write, and maintain, you
 would probably be interested in `infuse.nix`.
-
-## What?
-
-`infuse.nix` is a "deep" version of both `.override` and `.overrideAttrs`, which
-can be used as a leaner untyped alternative to lib.modules.  It works well with
-yants if you need runtime type-checking.
-
-`infuse` has simple and completely-specified semantics.  These semantics satisfy
-clear algebraic laws: identity, associativity, and several different kinds of
-distributivity.
-
-`infuse` generalizes `lib.pipe` (which acts only on lists) to act also on the
-other two non-finite Nix types: lists and attrsets.  It not only works on all
-three of these types, but on arbitrary interleavings of them (e.g. lists of
-attrsets with functions as attrvalues).
 
 
 ## There is No Magic Under the Hood
