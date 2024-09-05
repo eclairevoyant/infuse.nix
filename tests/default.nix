@@ -277,6 +277,8 @@ assert (infuse { } [{ x.y.z.fred.bob = {}; }]) == { };
 # to the identity function) to an attribute which does not exist will `throw`:
 assert expect-throw (infuse { } { x = []; });
 assert expect-throw (infuse { } { x.y.z.fred.bob = []; });
+# but of course the `throw` in the previous test isn't a problem if it isn't forced.
+assert              (infuse { } { x.y.z.fred.bob = []; x.y.q.__assign = 3; }).x.y.q == 3;
 
 # make sure the `infuse.missing` value does not leak out to the return value of `infuse`
 assert expect-throw (infuse { x = 4; } { y = z: z; }).y;
