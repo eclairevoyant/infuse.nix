@@ -76,20 +76,20 @@ are just *sugar*.  You can omit them, or even define your own sugars:
 
 ```nix
 let
-  infuse = import ./infuse.nix {
-    sugars = infuse.defaultSugars ++ [ {
+  infuse = import ../default.nix {
+    inherit lib;
+    sugars = infuse.v1.default-sugars ++ lib.attrsToList {
       __concatStringsSep =
-        infusion: target:
+        path: infusion: target:
           lib.strings.concatStringsSep infusion target;
-    } ];
+    };
   };
 in
-  assert
-    infuse
-      { fred.__concatStringsSep = "-"; }
-      { fred = [ "woo" "hoo" ]; }
-    ==
-      { fred = "woo-hoo"; }
+  infuse.v1.infuse
+    { fred = [ "woo" "hoo" ]; }
+    { fred.__concatStringsSep = "-"; }
+  ==
+    { fred = "woo-hoo"; }
 ```
 
 The process of replacing these double-underscore attributes by expanded
