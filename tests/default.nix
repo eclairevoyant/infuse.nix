@@ -268,6 +268,7 @@ assert expect-throw ((infuse 3 { }) == null);
 # infusing an empty set to an attribute that does not exist should not create it
 assert (infuse { } { x = {}; }) == { };
 assert (infuse { } { x.y.z.fred.bob = {}; }) == { };
+assert (infuse { } [{ x.y.z.fred.bob = {}; }]) == { };
 
 # however, infusing the identity function or the empty list (which is equivalent
 # to the identity function) to an attribute which does not exist will `throw`:

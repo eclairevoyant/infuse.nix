@@ -212,7 +212,9 @@ let
   prune =
     path:
     infusion:
-    if !(isAttrs infusion)
+    if isList infusion
+    then map-with-path path prune infusion
+    else if !(isNonFunctorAttrs infusion)
     then infusion
     else let
       pruned = mapAttrs (k: v: prune (path ++ [k]) v) infusion;
