@@ -19,7 +19,7 @@
 # overflow (TODO: something like quickcheck, sweep over a bunch of values)
 , any-integer ? 4
 , any-integer2 ? 100212
-
+, optimize ? false
 , ...
 }:
 let
@@ -28,7 +28,10 @@ let
   inherit (import ./.. { inherit lib; }) v1;
 
   # we want to test the optimizer too
-  infuse = target: infusion: v1.infuse target (v1.optimize infusion);
+  infuse =
+    if !optimize
+    then v1.infuse
+    else target: infusion: v1.infuse target (v1.optimize infusion);
 
   toPretty = v: lib.generators.toPretty {} v;
   tryEvalDeep = expr: tryEval (deepSeq expr expr);
