@@ -1,6 +1,6 @@
 ############################################################################
 #
-# version 2.0
+# version 2.1
 #
 # `infuse.nix` is a "deep" version of both `.override` and `.overrideAttrs` which
 # generalizes both `lib.pipe` and `recursiveUpdate`.  It can be used as a leaner,
@@ -288,9 +288,9 @@ let
     # the identity overlay, lambda-lifted to avoid allocations
     identity-overlay = final: prev: prev;
 
-    # `defaulted default func` is the same as `func` -- except when applied to
+    # `with-default default func` is the same as `func` -- except when applied to
     # the `missing-value-marker`; in that case it returns `func default`
-    defaulted =
+    with-default =
       default: func:
       arg:
       if arg == missing-attribute-marker
@@ -307,7 +307,7 @@ let
       };
 
     __default = path: value:
-      defaulted value id;
+      with-default value id;
 
     __assign = path: value: _:
       value;
@@ -316,7 +316,7 @@ let
       if isNonFunctorAttrs overlay then
         __underlay path (_: flip-infuse path overlay)
       else if isFunction overlay then
-        defaulted identity-overlay
+        with-default identity-overlay
           (old:
             assert isFunction old;
             lib.composeExtensions overlay old)
@@ -331,7 +331,7 @@ let
       if isNonFunctorAttrs overlay then
         __overlay path (_: flip-infuse path overlay)
       else if isFunction overlay then
-        defaulted identity-overlay
+        with-default identity-overlay
           (old:
             assert isFunction old;
             lib.composeExtensions old overlay)
@@ -344,9 +344,9 @@ let
 
     __prepend = path: infusion:
       if isString infusion then
-        defaulted "" (string: assert isString string; infusion + string)
+        with-default "" (string: assert isString string; infusion + string)
       else if isList infusion then
-        defaulted [] (list: assert isList list; infusion ++ list)
+        with-default [] (list: assert isList list; infusion ++ list)
       else
         throw-error {
           inherit path;
@@ -356,9 +356,9 @@ let
 
     __append = path: infusion:
       if isString infusion then
-        defaulted "" (string: assert isString string; string + infusion)
+        with-default "" (string: assert isString string; string + infusion)
       else if isList infusion then
-        defaulted [] (list: assert isList list; list ++ infusion)
+        with-default [] (list: assert isList list; list ++ infusion)
       else
         throw-error {
           inherit path;
