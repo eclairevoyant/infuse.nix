@@ -25,8 +25,8 @@
 #       (builtins.fetchGit {
 #         url  = "https://codeberg.org/amjoseph/infuse.nix";
 #         name = "infuse.nix";
-#         ref  = "refs/tags/v1.0";
-#         rev  = "2cfdac268f1027de276a4b94226d1e51fe2ae86d";
+#         ref  = "refs/tags/v1.1";
+#         rev  = "f984d31acbb175958d198c88de70187c23f16571";
 #         shallow = true;
 #         publicKey = "F0B74D717CDE8412A3E0D4D5F29AC8080DA8E1E0";
 #         keytype = "pgp-ed25519";
