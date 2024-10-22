@@ -1,6 +1,6 @@
 ############################################################################
 #
-# version 1.0
+# version 1.1
 #
 # `infuse.nix` is a "deep" version of both `.override` and `.overrideAttrs` which
 # generalizes both `lib.pipe` and `recursiveUpdate`.  It can be used as a leaner,
@@ -294,11 +294,11 @@ let
       # equality to create a special value which can never be (==)-equal to any
       # value created outside of this file.
       # [1]: https://code.tvl.fyi/tree/tvix/docs/src/value-pointer-equality.md
-      unique-marker = [ (_: throw "don't force this!") ];
+      missing-attribute-marker = [[(throw "the missing-attribute-marker was forced")]];
     in path: value: {
-      __default_argument = unique-marker;
+      __default_argument = missing-attribute-marker;
       __functor = _: prev:
-        if prev == unique-marker
+        if prev == missing-attribute-marker
         then value
         else throw-error {
           inherit path;
