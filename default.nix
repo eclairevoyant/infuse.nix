@@ -11,8 +11,7 @@
 # You may copy and modify this subject to the (MIT) license a the end
 # of this file.
 #
-#   canonical source: https://git.sr.ht/~amjoseph/infuse.nix
-#   backup mirror:    https://codeberg.org/amjoseph/infuse.nix
+#   canonical source: https://codeberg.org/amjoseph/infuse.nix
 #   questions:        #six/hackint (be patient, i am asynchronous)
 #
 #                        ****** VENDOR ME! ******
@@ -24,7 +23,7 @@
 #   infuse =
 #     (import
 #       (builtins.fetchGit {
-#         url  = "https://git.sr.ht/~amjoseph/infuse.nix";
+#         url  = "https://codeberg.org/amjoseph/infuse.nix";
 #         name = "infuse.nix";
 #         ref  = "refs/tags/v1.0";
 #         rev  = "2cfdac268f1027de276a4b94226d1e51fe2ae86d";

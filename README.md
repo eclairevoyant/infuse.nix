@@ -1,7 +1,6 @@
 # infuse.nix
 
-- canonical repository: [https://git.sr.ht/~amjoseph/infuse.nix](https://git.sr.ht/~amjoseph/infuse.nix).
-- backup mirror: [https://codeberg.org/amjoseph/infuse.nix](https://codeberg.org/amjoseph/infuse.nix).
+- canonical repository: [https://codeberg.org/amjoseph/infuse.nix](https://codeberg.org/amjoseph/infuse.nix).
 - questions: `#six/hackint` (be patient, i am asynchronous)
 
 ## What?
