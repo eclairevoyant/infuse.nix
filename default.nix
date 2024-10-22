@@ -1,6 +1,6 @@
 ############################################################################
 #
-# version 1.1
+# version 2.0
 #
 # `infuse.nix` is a "deep" version of both `.override` and `.overrideAttrs` which
 # generalizes both `lib.pipe` and `recursiveUpdate`.  It can be used as a leaner,
@@ -25,8 +25,8 @@
 #       (builtins.fetchGit {
 #         url  = "https://codeberg.org/amjoseph/infuse.nix";
 #         name = "infuse.nix";
-#         ref  = "refs/tags/v1.1";
-#         rev  = "f984d31acbb175958d198c88de70187c23f16571";
+#         ref  = "refs/tags/v2.0";
+#         rev  = "";
 #         shallow = true;
 #         publicKey = "F0B74D717CDE8412A3E0D4D5F29AC8080DA8E1E0";
 #         keytype = "pgp-ed25519";
@@ -58,10 +58,8 @@
 #
 # - for a function,
 #   - if the target exists, the result is the function applied to the target
-#   - if the target does not exist,
-#     - if the function is *not* a `__functor`, the result is an error
-#     - if the function is a `__functor`, then the result is the function
-#       applied to the function's __default_argument attribute.
+#   - if the target does not exist, the function is applied to
+#     `infusion.__default_argument or missing-value-marker`
 # - for an attrset,
 #   - if the target is a derivation: the result is an error
 #   - if the target is not an attrset: the result is an error
@@ -200,16 +198,8 @@ let
        else if isList infusion
        then if length infusion != 0
             then get-default-argument path (head infusion)
-            else throw-error {
-              inherit path;
-              func = "get-default-argument";
-              msg = "attrpath does not exist in the target, but the empty list [] was infused to it";
-            }
-       else throw-error {
-         inherit path;
-         func = "get-default-argument";
-         msg = "attrpath does not exist in the target, but function infused to it is strict ${builtins.toXML infusion}";
-       });
+            else missing-attribute-marker
+       else missing-attribute-marker);
 
   # Replace any leafless attrsets anywhere within the infusion with `{}`
   # A leafless attrset is either `{}` or an attrset whose attrvalues are all
@@ -285,32 +275,39 @@ let
   ##############################################################################
   # Desugaring
 
+  # This uses [@sternenseeman's research][1] on the semantics of Nix function
+  # equality to create a special value which can never be (==)-equal to any
+  # value created outside of this file.
+  # [1]: https://code.tvl.fyi/tree/tvix/docs/src/value-pointer-equality.md
+  missing-attribute-marker = [[(throw "the missing-attribute-marker was forced")]];
+
   # each of the __foo functions below takes its argument exactly as it appears
   # in the (sugared) infusion, and should return a *desugared* infusion.
   default-sugars = let
 
-    __init = let
-      # This uses [@sternenseeman's research][1] on the semantics of Nix function
-      # equality to create a special value which can never be (==)-equal to any
-      # value created outside of this file.
-      # [1]: https://code.tvl.fyi/tree/tvix/docs/src/value-pointer-equality.md
-      missing-attribute-marker = [[(throw "the missing-attribute-marker was forced")]];
-    in path: value: {
-      __default_argument = missing-attribute-marker;
-      __functor = _: prev:
-        if prev == missing-attribute-marker
-        then value
-        else throw-error {
-          inherit path;
-          func = "desugar";
-          msg = "infused a value to __init but attribute already existed, value=${toPretty {} prev}; maybe you meant to use __assign or __default?";
-        };
-    };
+    # the identity overlay, lambda-lifted to avoid allocations
+    identity-overlay = final: prev: prev;
 
-    __default = path: value: {
-      __functor = _: id;
-      __default_argument = value;
-    };
+    # `defaulted default func` is the same as `func` -- except when applied to
+    # the `missing-value-marker`; in that case it returns `func default`
+    defaulted =
+      default: func:
+      arg:
+      if arg == missing-attribute-marker
+      then func default
+      else func arg;
+
+    __init = path: value: prev:
+      if prev == missing-attribute-marker
+      then value
+      else throw-error {
+        inherit path;
+        func = "desugar";
+        msg = "infused a value to __init but attribute already existed, value=${toPretty {} prev}; maybe you meant to use __assign or __default?";
+      };
+
+    __default = path: value:
+      defaulted value id;
 
     __assign = path: value: _:
       value;
@@ -318,10 +315,12 @@ let
     __underlay = path: overlay:
       if isNonFunctorAttrs overlay then
         __underlay path (_: flip-infuse path overlay)
-      else if isFunction overlay then {
-        __default_argument = final: prev: prev;
-        __functor = _: old: assert isFunction old; lib.composeExtensions overlay old;
-      } else
+      else if isFunction overlay then
+        defaulted identity-overlay
+          (old:
+            assert isFunction old;
+            lib.composeExtensions overlay old)
+      else
         throw-error {
           inherit path;
           func = "prelay";
@@ -331,10 +330,12 @@ let
     __overlay = path: overlay:
       if isNonFunctorAttrs overlay then
         __overlay path (_: flip-infuse path overlay)
-      else if isFunction overlay then {
-        __default_argument = final: prev: prev;
-        __functor = _: old: assert isFunction old; lib.composeExtensions old overlay;
-      } else
+      else if isFunction overlay then
+        defaulted identity-overlay
+          (old:
+            assert isFunction old;
+            lib.composeExtensions old overlay)
+      else
         throw-error {
           inherit path;
           func = "overlay";
@@ -342,13 +343,11 @@ let
         };
 
     __prepend = path: infusion:
-      if isString infusion then {
-        __default_argument = "";
-        __functor = _: string: assert isString string; infusion + string;
-      } else if isList infusion then {
-        __default_argument = [];
-        __functor = _: list: assert isList list; infusion ++ list;
-      } else
+      if isString infusion then
+        defaulted "" (string: assert isString string; infusion + string)
+      else if isList infusion then
+        defaulted [] (list: assert isList list; infusion ++ list)
+      else
         throw-error {
           inherit path;
           func = "prepend";
@@ -356,13 +355,11 @@ let
         };
 
     __append = path: infusion:
-      if isString infusion then {
-        __default_argument = "";
-        __functor = _: string: assert isString string; string + infusion;
-      } else if isList infusion then {
-        __default_argument = [];
-        __functor = _: list: assert isList list; list ++ infusion;
-      } else
+      if isString infusion then
+        defaulted "" (string: assert isString string; string + infusion)
+      else if isList infusion then
+        defaulted [] (list: assert isList list; list ++ infusion)
+      else
         throw-error {
           inherit path;
           func = "append";

@@ -16,3 +16,13 @@ to a missing attribute:
      infuse, ordinary functions might not force enough of the missing value
      to trigger the error that they should experience.
 
+Although the first approach is preferable, it breaks the left identity rule for
+list infusions because these two infusions no longer do the exact same thing:
+
+```
+{ y = [    { __init = 7; } ]; }
+{ y = [ [] { __init = 7; } ]; }
+```
+
+There is a test case to check that this identity law is not violated.
+

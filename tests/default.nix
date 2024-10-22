@@ -127,6 +127,7 @@ assert (infuse { a.b = 3; } { a.q.__default.__default = 9; }) == { a.b = 3; a.q.
 
 # __init
 assert (infuse { x = 4; } [ lib.id { y.__init = 7; } ] == { x = 4; y = 7; });
+assert (infuse { x = 4; } { y = [ [] { __init = 7; } ]; } == { x = 4; y = 7; });   # check left identity is not broken by missing arguments
 assert (infuse { a.b = 3; } { a.q.__init = 9; }) == { a.b = 3; a.q = 9; };
 assert expect-throw (infuse { a.b = 3; } { a.b.__init = 9; });
 assert (infuse { } { a.__init.__assign = 9; }) == { a.__assign = 9; };
