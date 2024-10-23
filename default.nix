@@ -1,6 +1,6 @@
 ############################################################################
 #
-# version 2.2
+# version 2.3
 #
 # `infuse.nix` is a "deep" version of both `.override` and `.overrideAttrs` which
 # generalizes both `lib.pipe` and `recursiveUpdate`.  It can be used as a leaner,
@@ -25,8 +25,8 @@
 #       (builtins.fetchGit {
 #         url  = "https://codeberg.org/amjoseph/infuse.nix";
 #         name = "infuse.nix";
-#         ref  = "refs/tags/v2.0";
-#         rev  = "b48397aaa7f4ea7ec5391136175c6f180840947e";
+#         ref  = "refs/tags/v2.3";
+#         rev  = "";
 #         shallow = true;
 #         publicKey = "F0B74D717CDE8412A3E0D4D5F29AC8080DA8E1E0";
 #         keytype = "pgp-ed25519";
@@ -59,7 +59,7 @@
 # - for a function,
 #   - if the target exists, the result is the function applied to the target
 #   - if the target does not exist, the function is applied to
-#     `infusion.__default_argument or missing-value-marker`
+#     `infusion.__default_argument or missing-attribute-marker`.
 # - for an attrset,
 #   - if the target is a derivation: the result is an error
 #   - if the target is not an attrset: the result is an error
@@ -289,7 +289,7 @@ let
     identity-overlay = final: prev: prev;
 
     # `with-default default func` is the same as `func` -- except when applied to
-    # the `missing-value-marker`; in that case it returns `func default`
+    # the `missing-attribute-marker`; in that case it returns `func default`
     with-default =
       default: func:
       arg:
