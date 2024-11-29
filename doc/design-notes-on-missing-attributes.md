@@ -1,6 +1,6 @@
 # Design notes on representation of "missing" target attributes:
 
-There are basically two ways to represent the "previous value" when infusing
+There are basically three ways to represent the "previous value" when infusing
 to a missing attribute:
 
 1. Represent functions which can tolerate (or are sensitive to) a missing
@@ -16,6 +16,20 @@ to a missing attribute:
      infuse, ordinary functions might not force enough of the missing value
      to trigger the error that they should experience.
 
+3. Use the Nix "missing attribute" value.
+
+   You can't see this from inside the language, but if you ever try
+   implementing a Nix interpreter it quickly becomes clear that the
+   "value" enum/union needs to have a branch that represents `{}.foo`
+   so that `{}.foo or false` can be implemented correctly.
+   
+   - Downsides: infusion leaf attributes would need to be functions
+     which take one-attribute attrsets (i.e. `{x?false}: ...` instead
+     of `x: ...`), which would require wrapping every infusion
+     argument in an extra heap-allocated attrset.  This causes a very
+     large load on the garbage collector in the most-common path.  The
+     performance costs are very significant.
+
 Although the first approach is preferable, it breaks the left identity rule for
 list infusions because these two infusions no longer do the exact same thing:
 
@@ -24,5 +38,8 @@ list infusions because these two infusions no longer do the exact same thing:
 { y = [ [] { __init = 7; } ]; }
 ```
 
-There is a test case to check that this identity law is not violated.
+(there is a test case to check that the identity law is not violated).
+
+Since the first approach is semantically unsound and the third
+approach has major performance costs, we choose the second approach.
 
