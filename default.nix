@@ -378,7 +378,7 @@ let
           throw-error {
             inherit path;
             func = "input";
-            msg = "attempted to infuse a function to target.__input but !(isFunction target)";
+            msg = "attempted to infuse a function to __input attribute of a ${typeOf infusion}";
           }
       else
         throw-error {
