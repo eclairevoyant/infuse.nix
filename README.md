@@ -2,6 +2,7 @@
 
 - canonical repository: [https://codeberg.org/amjoseph/infuse.nix](https://codeberg.org/amjoseph/infuse.nix).
 - questions: `#six/hackint` (be patient, i am asynchronous)
+- the commutative diagram alluded to in the 38c3 talk is in [`doc/commutative-diagram.md`](./doc/commutative-diagram.md)
 
 ## What?
 
