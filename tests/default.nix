@@ -219,6 +219,13 @@ assert
 #   diagram below.  I think that probably makes infuse a natural transformation
 #   in some way, but it's only a hunch right now.
 #
+#
+#   # abbreviations to improve readability of diagram
+#   let
+#     foo' = flip infuse foo
+#     bar' = flip infuse bar
+#     baz' = flip infuse baz
+#   in
 #                                                                 zipAttrs
 #       [  { y = foo; } ... { y = bar; } { x = baz; } ]  ------------------------>      { y = [ foo ... bar ];  x = baz; }
 #                                  |                                                                  |
