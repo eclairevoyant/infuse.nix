@@ -160,23 +160,23 @@ infusion is applied to the target attrvalue which has the same attrpath.
 Let's take a look at `lib.pipe`.  It has two important properties:
 
 - `flip pipe []` does the same thing as `lib.id`
-- `flip pipe (a ++ b)` does the same thing as `compose (flip pipe a) (flip pipe b)`
+- `flip pipe (a ++ b)` does the same thing as `flip pipe [ (flip pipe a) (flip pipe b) ]`
 
 Infuse has both of these properties as well, when used on lists:
 
 - `flip infuse []` does the same thing as `lib.id`
-- `flip infuse (a ++ b)` does the same thing as `compose (flip infuse a) (flip infuse b)`
+- `flip infuse (a ++ b)` does the same thing as `flip pipe [ (flip infuse a) (flip infuse b) ]`
 
 What makes `infuse` special is that it also works on attrsets, and does so *in
 the same way* that it (and `lib.pipe`) work on lists:
 
 - `flip infuse {}` does the same thing as `lib.id`
-- `flip infuse (a // b)` does the same thing as `compose (flip infuse a) (flip infuse b)`
+- `flip infuse (a // b)` does the same thing as `flip pipe [ (flip infuse a) (flip infuse b) ]`
 
 In fact, `infuse` does the same trick for functions too!
 
 - `flip infuse lib.id` does the same thing as `lib.id`
-- `flip infuse (compose a b)` does the same thing as `compose (flip infuse a) (flip infuse b)`
+- `flip infuse (pipe [ a b ])` does the same thing as `flip pipe [ (flip infuse a) (flip infuse b) ]`
 
 Most important of all, these are not three *separate* tricks (one for lists, one
 for attrsets, and one for functions).  It is one single trick that works *at all
