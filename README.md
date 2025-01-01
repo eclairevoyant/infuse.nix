@@ -59,7 +59,7 @@ final: prev: infuse prev {
 
   python311.__input.packageOverrides.__overlay.dnspython.__output.doCheck.__assign = false;
 
-  xrdp.__input.systemd._assign = null;
+  xrdp.__input.systemd.__assign = null;
   xrdp.__output.env.NIX_CFLAGS_COMPILE.__append = " -w";
   xrdp.__output.passthru.xorgxrdp.__output.configureFlags.__append = ["--without-fuse"];
 
