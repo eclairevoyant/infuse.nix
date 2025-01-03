@@ -11,7 +11,7 @@ of Nix's three nonprimitive types (attrsets, lists, and functions):
 
 1. On a list-of-functions, `flip infuse` is exactly `flip pipe`
 2. On a list-of-attrsets, `flip infuse` is `flip pipe [ zipAttrs infuse ]`
-3. On an attrset-of-functions, `flip infuse` acts like `applyAttrs`
+3. On an attrset-of-functions, `flip infuse` acts like `applyAttrs = flip pipe [ (flip getAttr) mapAttrs ]`
 
 Additionally, the preexisting monoid-preserving maps (`zipAttrs`, `pipe`, and
 `applyAttrs`) commute with `infuse` as shown in the diagram below.  I think that
