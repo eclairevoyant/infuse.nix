@@ -156,8 +156,17 @@ let
     any all pipe showAttrPath nameValuePair listToAttrs
     zipAttrsWith isList isString id flatten filter hasPrefix
     attrNames filterAttrs optionalString hasAttr;
-  inherit (lib.generators)
-    toPretty;
+
+  # This is a `throw`-tolerant version of toPretty, so that error diagnostics in
+  # this file will print "<<throw>>" rather than triggering a cascading error.
+  toPretty =
+    args: val:
+    let
+      try = builtins.tryEval (lib.generators.toPretty args val);
+    in
+      if try.success
+      then try.value
+      else "<<throw>>";
 
 
   ##############################################################################
