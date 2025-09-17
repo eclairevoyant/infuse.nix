@@ -112,7 +112,7 @@ assert (infuse
    10);
 
 # function
-assert (infuse { a = 3; } (lib.mapAttrs (_: v: v * v))) == { a = 9; };
+assert (infuse { a = 3; } (mapAttrs (_: v: v * v))) == { a = 9; };
 
 # list
 assert (infuse { a.b = 3; } { a.b = [ (x: x + 1) (x: x * x) ]; }) == { a.b = 16; };
@@ -129,7 +129,7 @@ assert (infuse { a.b = 3; } { a.q.__default = 9; }) == { a.b = 3; a.q = 9; };
 assert (infuse { a.b = 3; } { a.q.__default.__default = 9; }) == { a.b = 3; a.q.__default = 9; };
 
 # __init
-assert (infuse { x = 4; } [ lib.id { y.__init = 7; } ] == { x = 4; y = 7; });
+assert (infuse { x = 4; } [ id { y.__init = 7; } ] == { x = 4; y = 7; });
 assert (infuse { x = 4; } { y = [ [] { __init = 7; } ]; } == { x = 4; y = 7; });   # check left identity is not broken by missing arguments
 assert (infuse { a.b = 3; } { a.q.__init = 9; }) == { a.b = 3; a.q = 9; };
 assert expect-throw (infuse { a.b = 3; } { a.b.__init = 9; });
@@ -226,8 +226,8 @@ assert
   flip pipe (map (flip infuse)   (map lift-y [ squared inc ]))   y-any-integer;
 
 # distributive law of `lib.pipe` over `flip infuse` (for lists)
-assert lib.pipe { y = any-integer; } (map (flip infuse) [ [ { y =   squared; } { y = inc; } ]      ])
-  ==   lib.pipe { y = any-integer; } (map (flip infuse) [   { y =   squared; } { y = inc; }        ]);
+assert pipe { y = any-integer; } (map (flip infuse) [ [ { y =   squared; } { y = inc; } ]      ])
+  ==   pipe { y = any-integer; } (map (flip infuse) [   { y =   squared; } { y = inc; }        ]);
 
 # distributive law of `{}` over `[]` for one-element attrsets
 assert equal-infusions
@@ -267,8 +267,8 @@ assert (infuse { x = 4; } { y = [ (_: 3) ]; } == { x = 4; y = 3; });
 assert (infuse { x = 4; } { y = [ (x: x) (_: 3) ] ; } == { x = 4; y = 3; });
 
 # we also need to check the "distributive law" for these error cases:
-assert (infuse { x = 4; } [ { y = lib.id; } { y = _: 3; } ] == { x = 4; y = 3; });
-assert (lib.pipe { x = 4; } [ (lib.flip infuse { y = lib.id; }) (lib.flip infuse { y = _: 3; }) ] == { x = 4; y = 3; });
+assert (infuse { x = 4; } [ { y = id; } { y = _: 3; } ] == { x = 4; y = 3; });
+assert (pipe { x = 4; } [ (flip infuse { y = id; }) (flip infuse { y = _: 3; }) ] == { x = 4; y = 3; });
 
 # infusing a boolean, integer, float, or null is undefined
 assert expect-throw (infuse {} { x = 3;     });

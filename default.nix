@@ -150,12 +150,12 @@ let
   # details.
 
   inherit (builtins)
-    typeOf length head tail attrValues intersectAttrs;
+    typeOf length head attrValues intersectAttrs;
   inherit (lib)
-    concatStringsSep flip mapAttrs isFunction isAttrs isDerivation
-    any all pipe showAttrPath nameValuePair listToAttrs
-    zipAttrsWith isList isString id flatten filter hasPrefix
-    attrNames filterAttrs optionalString hasAttr;
+    flip mapAttrs isFunction isAttrs isDerivation
+    any all showAttrPath nameValuePair listToAttrs
+    isList isString id flatten filter hasPrefix
+    attrNames optionalString hasAttr;
 
   # This is a `throw`-tolerant version of toPretty, so that error diagnostics in
   # this file will print "<<throw>>" rather than triggering a cascading error.
@@ -296,7 +296,7 @@ let
   default-sugars = let
 
     # the identity overlay, lambda-lifted to avoid allocations
-    identity-overlay = final: prev: prev;
+    identity-overlay = _: prev: prev;
 
     # `with-default default func` is the same as `func` -- except when applied to
     # the `missing-attribute-marker`; in that case it returns `func default`
@@ -316,10 +316,10 @@ let
         msg = "infused a value to __init but attribute already existed, value=${toPretty {} prev}; maybe you meant to use __assign or __default?";
       };
 
-    __default = path: value:
+    __default = _path: value:
       with-default value id;
 
-    __assign = path: value: _:
+    __assign = _path: value: _:
       value;
 
     __underlay = path: overlay:
